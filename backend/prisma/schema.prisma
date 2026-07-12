@@ -1,0 +1,782 @@
+// =========================================================
+// Line Media Inventory ERP — Database Schema
+// PostgreSQL + Prisma
+// =========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================
+// الأدوار والصلاحيات (نظام حر وقابل للتخصيص بالكامل)
+// كل دور (Role) اسمه حر (تكتبه إنت)، وله صلاحيات منفصلة لكل قسم
+// في البرنامج: عرض / إضافة / تعديل / حذف
+// =========================================================
+
+model Role {
+  id        String   @id @default(cuid())
+  name      String   @unique // اسم حر: "مدير النظام"، "محاسب"، "مسؤول إضاءة"...
+  isSystem  Boolean  @default(false) // أدوار أساسية محمية من الحذف (مدير النظام)
+  // هل مستخدمين الدور ده يظهروا في قوائم "المُسلّم"/"المُستلم" جوه أذون
+  // الصرف والمرتجع ونقل العهدة؟ افتراضياً لأ — عشان أدوار زي "مدير النظام"
+  // ما تتخلطش مع أدوار الأوبريشن الفعلية اللي بتسلّم وتستلم على أرض الواقع
+  appearsInHandoverLists Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions Permission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String  @id @default(cuid())
+  roleId    String
+  module    String // مفتاح القسم: items, warehouses, events...
+  canView   Boolean @default(false)
+  canCreate Boolean @default(false)
+  canEdit   Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, module])
+  @@map("permissions")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  fullName     String
+  passwordHash String
+  roleId       String
+  isActive     Boolean  @default(true)
+  phone        String?
+  avatarUrl    String?
+  restrictToAssignedEvents Boolean @default(false) // لو true، يشوف الحفلات المعيّن عليها بس (مش كل الحفلات)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  role Role @relation(fields: [roleId], references: [id])
+
+  issueVouchers  IssueVoucher[]
+  returnVouchers ReturnVoucher[]
+  lossRecords    LossRecord[]
+  activityLogs   ActivityLog[]
+  events         Event[]          @relation("EventResponsible")
+  maintenances   Maintenance[]
+  stockCounts    StockCount[]
+  custodyTransfers CustodyTransfer[]
+  eventAssignments EventAssignment[]
+  custodyTransfersHandedBy   CustodyTransfer[] @relation("CustodyTransferHandedBy")
+  custodyTransfersReceivedBy CustodyTransfer[] @relation("CustodyTransferReceivedBy")
+  issueVouchersHandedBy   IssueVoucher[] @relation("IssueVoucherHandedBy")
+  issueVouchersReceivedBy IssueVoucher[] @relation("IssueVoucherReceivedBy")
+  returnVouchersHandedBy   ReturnVoucher[] @relation("ReturnVoucherHandedBy")
+  returnVouchersReceivedBy ReturnVoucher[] @relation("ReturnVoucherReceivedBy")
+  eventCostItems   EventCostItem[]
+  eventCostEntries EventCostRecordEntry[]
+  stockTransfers StockTransfer[]
+
+  @@map("users")
+}
+
+// =========================================================
+// التصنيفات
+// =========================================================
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items Item[]
+
+  @@map("categories")
+}
+
+// =========================================================
+// المخازن
+// =========================================================
+
+model Warehouse {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  responsible String?
+  notes       String?
+  isActive    Boolean  @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stockLevels      StockLevel[]
+  issueVouchers    IssueVoucher[]
+  returnVouchers   ReturnVoucher[]
+  lossRecords      LossRecord[]
+  stockCounts      StockCount[]
+  transfersFrom    StockTransfer[]    @relation("TransferFromWarehouse")
+  transfersTo      StockTransfer[]    @relation("TransferToWarehouse")
+
+  @@map("warehouses")
+}
+
+// =========================================================
+// الأصناف
+// كل صنف له كمية إجمالية، لكن الكمية الفعلية تُحسب لكل مخزن
+// عبر StockLevel (لدعم تعدد المخازن بشكل صحيح ومحاسبي)
+// =========================================================
+
+model Item {
+  id           String   @id @default(cuid())
+  code         String   @unique // كود تلقائي مثل ITM-00001
+  name         String
+  categoryId   String
+  unit         String   // قطعة، متر، كرتون...
+  imageUrl     String?
+  minQuantity  Int      @default(0)
+  initialQuantity Int?  // [مهجور] كانت ميزة "الكمية الأساسية" — اتشالت بالكامل من النظام، العمود موجود بس مش بيتقرا ولا بيتكتب فيه
+  initialWarehouseId String? // [مهجور] نفس الحكاية
+  defaultLocation String? // مكان التخزين الافتراضي (رف/قسم)
+  barcode      String?  @unique
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  stockLevels        StockLevel[]
+  issueVoucherItems  IssueVoucherItem[]
+  returnVoucherItems ReturnVoucherItem[]
+  lossRecords        LossRecord[]
+  reservations       Reservation[]
+  maintenances       Maintenance[]
+  stockCountItems    StockCountItem[]
+  transferItems      StockTransferItem[]
+  custodyTransferItems CustodyTransferItem[]
+  supplierItems      SupplierItem[]
+
+  @@index([categoryId])
+  @@map("items")
+}
+
+// رصيد كل صنف داخل كل مخزن (Many-to-Many مع كمية)
+model StockLevel {
+  id          String   @id @default(cuid())
+  itemId      String
+  warehouseId String
+  quantity    Int      @default(0) // الكمية المتاحة فعلياً
+  baseQuantity Int     @default(0) // [مهجور] كانت ميزة "الكمية الأساسية" — اتشالت بالكامل من النظام، العمود موجود بس مش بيتقرا ولا بيتكتب فيه
+  reservedQty Int      @default(0) // محجوزة لحفلات قادمة (لا تُصرف لغيرها)
+  minQuantity Int      @default(0) // الحد الأدنى للتنبيه — خاص بالمخزن ده تحديداً، مش الصنف عموماً (كل مخزن له احتياجه بيختلف عن التاني)
+  updatedAt   DateTime @updatedAt
+
+  item      Item      @relation(fields: [itemId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([itemId, warehouseId])
+  @@index([warehouseId])
+  @@map("stock_levels")
+}
+
+// =========================================================
+// الموردين (إضافة احترافية)
+// =========================================================
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  company   String?
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  items SupplierItem[]
+
+  @@map("suppliers")
+}
+
+model SupplierItem {
+  id         String   @id @default(cuid())
+  supplierId String
+  itemId     String
+  purchasePrice Decimal? @db.Decimal(12, 2)
+  lastPurchaseDate DateTime?
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  item     Item     @relation(fields: [itemId], references: [id])
+
+  @@unique([supplierId, itemId])
+  @@map("supplier_items")
+}
+
+// =========================================================
+// العملاء
+// =========================================================
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  company   String?
+  logoUrl   String?
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
+
+  @@map("clients")
+}
+
+// =========================================================
+// الحفلات / الفعاليات
+// =========================================================
+
+enum EventStatus {
+  PLANNED    // مخطط لها (قبل البداية)
+  ONGOING    // جارية — فيها صرف و/أو استرجاع بيحصل
+  CLOSED     // مغلقة (تمت تسوية كل الأصناف)
+  CANCELLED
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  number        String      @unique // رقم تلقائي EVT-0001
+  name          String
+  clientId      String
+  location      String?
+  startDate     DateTime
+  endDate       DateTime
+  status        EventStatus @default(PLANNED)
+  responsibleId String?
+  notes         String?
+  expectedBudget Float?  // الميزانية المتوقعة — لمقارنتها بالمصروف الفعلي في قسم الحسابات
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  client      Client @relation(fields: [clientId], references: [id])
+  responsible User?  @relation("EventResponsible", fields: [responsibleId], references: [id])
+
+  issueVouchers  IssueVoucher[]
+  returnVouchers ReturnVoucher[]
+  lossRecords    LossRecord[]
+  reservations   Reservation[]
+  attachments    Attachment[]
+  custodyTransfersOut CustodyTransfer[] @relation("CustodyFromEvent")
+  custodyTransfersIn  CustodyTransfer[] @relation("CustodyToEvent")
+  assignments EventAssignment[]
+  costItems      EventCostItem[]
+  costEntries    EventCostRecordEntry[]
+
+  @@index([clientId])
+  @@index([startDate, endDate])
+  @@map("events")
+}
+
+// تعيين مستخدم (أوبريشن) على حفلة معينة — تعيين متعدد، أكتر من شخص
+// ممكن يتعيّنوا على نفس الحفلة. بيُستخدم لتقييد مين يشوف إيه لو المستخدم
+// مفعّل عليه "يشوف حفلاته المعيّن عليها بس"
+model EventAssignment {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_assignments")
+}
+
+// نقل عهدة مباشر من حفلة لحفلة تانية (من غير ما يرجع المخزن الأول)
+// مفيد لو نفس الأصناف هتتنقل من حفلة خلصت لحفلة تانية شغالة على طول
+model CustodyTransfer {
+  id           String   @id @default(cuid())
+  number       String   @unique // CUS-0001
+  fromEventId  String
+  toEventId    String
+  receiverName String   // اسم المسؤول اللي استلم في الحفلة التانية (نص حر — لو مش مستخدم في النظام)
+  handedByUserId   String? // مين من الأوبريشن سلّم (اختياري، لو حابب تحدد بدل النص الحر)
+  receivedByUserId String? // مين من الأوبريشن استلم (اختياري)
+  handedBy   User? @relation("CustodyTransferHandedBy", fields: [handedByUserId], references: [id])
+  receivedBy User? @relation("CustodyTransferReceivedBy", fields: [receivedByUserId], references: [id])
+  vehicleCount   Int?    // عدد سيارات النقل (بيتحسب تلقائياً من vehicles)
+  transportInfo  String? // ملخص نصي لبنود النقل (بيتحسب تلقائياً من vehicles)
+  vehicles     Json?    // بنود النقل التفصيلية — كل عربية بوصفها لوحدها ["عربية كبيرة", "ربع نقل"]
+  notes        String?
+  status       VoucherStatus @default(CONFIRMED)
+  userId       String
+  createdAt    DateTime @default(now())
+
+  fromEvent Event @relation("CustodyFromEvent", fields: [fromEventId], references: [id])
+  toEvent   Event @relation("CustodyToEvent", fields: [toEventId], references: [id])
+  user      User  @relation(fields: [userId], references: [id])
+
+  items CustodyTransferItem[]
+
+  @@index([fromEventId])
+  @@index([toEventId])
+  @@map("custody_transfers")
+}
+
+model CustodyTransferItem {
+  id         String @id @default(cuid())
+  transferId String
+  itemId     String
+  quantity   Int
+
+  transfer CustodyTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item     Item            @relation(fields: [itemId], references: [id])
+
+  @@map("custody_transfer_items")
+}
+
+// حجز أصناف لحفلة مستقبلية — يمنع الصرف المزدوج لنفس الصنف
+// في حفلتين بتواريخ متداخلة
+model Reservation {
+  id        String   @id @default(cuid())
+  eventId   String
+  itemId    String
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+  item  Item  @relation(fields: [itemId], references: [id])
+
+  @@index([eventId])
+  @@index([itemId])
+  @@map("reservations")
+}
+
+// مرفقات الحفلة (عقود، صور، فواتير)
+model Attachment {
+  id        String   @id @default(cuid())
+  eventId   String
+  fileName  String
+  filePath  String
+  fileType  String?
+  uploadedAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@map("attachments")
+}
+
+// =========================================================
+// إذن الصرف
+// =========================================================
+
+enum VoucherStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+model IssueVoucher {
+  id          String        @id @default(cuid())
+  number      String        @unique // ISS-0001
+  warehouseId String
+  eventId     String
+  recipientName String
+  handedByUserId   String? // مين من الأوبريشن سلّم (اختياري)
+  receivedByUserId String? // مين من الأوبريشن استلم لو الصرف بين أوبريشن وتاني (اختياري)
+  handedBy   User? @relation("IssueVoucherHandedBy", fields: [handedByUserId], references: [id])
+  receivedBy User? @relation("IssueVoucherReceivedBy", fields: [receivedByUserId], references: [id])
+  vehicleCount  Int?          // عدد سيارات النقل
+  transportInfo String?       // ملاحظات نقل حرة — نص حر
+  vehicles      Json?         // بنود النقل التفصيلية — كل عربية بوصفها لوحدها
+  userId      String        // من قام بالصرف
+  status      VoucherStatus @default(CONFIRMED)
+  notes       String?
+  issueDate   DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  event     Event     @relation(fields: [eventId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  items IssueVoucherItem[]
+
+  @@index([eventId])
+  @@index([warehouseId])
+  @@map("issue_vouchers")
+}
+
+model IssueVoucherItem {
+  id        String @id @default(cuid())
+  voucherId String
+  itemId    String
+  quantity  Int
+
+  voucher IssueVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  item    Item         @relation(fields: [itemId], references: [id])
+
+  @@map("issue_voucher_items")
+}
+
+// =========================================================
+// إذن المرتجع
+// =========================================================
+
+model ReturnVoucher {
+  id        String        @id @default(cuid())
+  number    String        @unique // RET-0001
+  eventId   String
+  warehouseId String
+  userId    String
+  status    VoucherStatus @default(CONFIRMED)
+  notes     String?
+  handedByUserId   String? // مين من الأوبريشن سلّم (رجّع) — اختياري
+  receivedByUserId String? // مين من الأوبريشن استلم في المخزن — اختياري
+  handedBy   User? @relation("ReturnVoucherHandedBy", fields: [handedByUserId], references: [id])
+  receivedBy User? @relation("ReturnVoucherReceivedBy", fields: [receivedByUserId], references: [id])
+  vehicleCount Int?        // عدد سيارات النقل
+  transportInfo String?     // ملاحظات نقل حرة — نص حر
+  vehicles     Json?       // بنود النقل التفصيلية — كل عربية بوصفها لوحدها
+  returnDate DateTime     @default(now())
+  createdAt DateTime      @default(now())
+
+  event     Event     @relation(fields: [eventId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  items ReturnVoucherItem[]
+
+  @@index([eventId])
+  @@index([warehouseId])
+  @@map("return_vouchers")
+}
+
+model ReturnVoucherItem {
+  id              String @id @default(cuid())
+  voucherId       String
+  itemId          String
+  issuedQuantity  Int    // الكمية الأصلية المصروفة (مرجعية)
+  returnedQuantity Int   // الكمية المرجعة فعلياً بحالة سليمة
+  damagedQuantity Int    @default(0) // تالف لكنه أُعيد
+  lostQuantity    Int    @default(0) // مفقود نهائياً (يُسجَّل تلقائياً كفاقد)
+
+  voucher ReturnVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  item    Item          @relation(fields: [itemId], references: [id])
+
+  @@map("return_voucher_items")
+}
+
+// =========================================================
+// الفاقد
+// =========================================================
+
+enum LossReason {
+  DAMAGED
+  LOST
+  THEFT
+  OTHER
+}
+
+model LossRecord {
+  id          String     @id @default(cuid())
+  itemId      String
+  eventId     String?
+  warehouseId String?
+  quantity    Int
+  reason      LossReason
+  description String?
+  status      VoucherStatus @default(CONFIRMED)
+  source      String     @default("MANUAL") // MANUAL = يدوي | RETURN_VOUCHER = تلقائي من مرتجع | STOCK_COUNT = تلقائي من جرد لقى نقص — التعديل يكون من مصدره نفسه مش من هنا مباشرة
+  userId      String
+  lossDate    DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+
+  item      Item       @relation(fields: [itemId], references: [id])
+  event     Event?     @relation(fields: [eventId], references: [id])
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
+
+  @@index([itemId])
+  @@index([warehouseId])
+  @@map("loss_records")
+}
+
+// =========================================================
+// النقل بين المخازن (إضافة احترافية)
+// =========================================================
+
+model StockTransfer {
+  id            String   @id @default(cuid())
+  number        String   @unique // TRF-0001
+  fromWarehouseId String
+  toWarehouseId   String
+  userId        String
+  notes         String?
+  vehicleCount  Int?     // عدد سيارات النقل (بيتحسب تلقائياً من vehicles)
+  transportInfo String?  // ملخص نصي لبنود النقل (بيتحسب تلقائياً من vehicles)
+  vehicles      Json?    // بنود النقل التفصيلية — كل عربية بوصفها لوحدها
+  transferDate  DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  fromWarehouse Warehouse @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  items StockTransferItem[]
+
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String @id @default(cuid())
+  transferId String
+  itemId     String
+  quantity   Int
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item     Item          @relation(fields: [itemId], references: [id])
+
+  @@map("stock_transfer_items")
+}
+
+// =========================================================
+// الجرد الدوري (إضافة احترافية)
+// =========================================================
+
+model StockCount {
+  id          String   @id @default(cuid())
+  number      String   @unique // CNT-0001
+  warehouseId String
+  userId      String
+  notes       String?
+  countDate   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  items StockCountItem[]
+
+  @@map("stock_counts")
+}
+
+model StockCountItem {
+  id             String @id @default(cuid())
+  stockCountId   String
+  itemId         String
+  systemQuantity Int    // الكمية حسب النظام وقت الجرد
+  actualQuantity Int    // الكمية الفعلية المعدودة
+  difference     Int    // actual - system
+
+  stockCount StockCount @relation(fields: [stockCountId], references: [id], onDelete: Cascade)
+  item       Item       @relation(fields: [itemId], references: [id])
+
+  @@map("stock_count_items")
+}
+
+// =========================================================
+// صيانة المعدات (إضافة احترافية)
+// =========================================================
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Maintenance {
+  id          String            @id @default(cuid())
+  itemId      String
+  description String
+  status      MaintenanceStatus @default(PENDING)
+  cost        Decimal?          @db.Decimal(12, 2)
+  userId      String
+  startDate   DateTime          @default(now())
+  endDate     DateTime?
+
+  item Item @relation(fields: [itemId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("maintenances")
+}
+
+// =========================================================
+// سجل الحركة (Audit Log) — يسجل كل عملية في النظام
+// =========================================================
+
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  ISSUE
+  RETURN
+  LOSS
+  TRANSFER
+  STOCK_COUNT
+  LOGIN
+  RESTORE
+}
+
+model ActivityLog {
+  id         String         @id @default(cuid())
+  action     ActivityAction
+  entityType String         // اسم الموديل: Item, Event, IssueVoucher...
+  entityId   String
+  description String
+  userId     String
+  createdAt  DateTime       @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  emailQueue EmailQueue[]
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// =========================================================
+// إشعارات الإيميل (النظام Desktop Offline-First، والإيميلات
+// بتتبعت لما يكون في اتصال بالنت فقط — عبر طابور انتظار)
+// =========================================================
+
+model EmailRecipient {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  isActive  Boolean  @default(true)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("email_recipients")
+}
+
+// إعدادات الشركة العامة — سجل واحد بس (Singleton) بيتعرض في التقارير والمستندات
+model CompanySettings {
+  id          String  @id @default("singleton")
+  companyName String  @default("UG Production House")
+  phone       String?
+  address     String?
+  email       String?
+
+  @@map("company_settings")
+}
+
+enum EmailQueueStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model EmailQueue {
+  id            String           @id @default(cuid())
+  activityLogId String?
+  subject       String
+  body          String
+  reportType    String?          // 'daily' أو 'monthly' — لو الرسالة دي تقرير دوري محتاج PDF مرفق
+  reportDate    String?          // YYYY-MM-DD لليومي أو YYYY-MM للشهري
+  status        EmailQueueStatus @default(PENDING)
+  attempts      Int              @default(0)
+  lastError     String?
+  createdAt     DateTime         @default(now())
+  sentAt        DateTime?
+
+  activityLog ActivityLog? @relation(fields: [activityLogId], references: [id])
+
+  @@index([status])
+  @@map("email_queue")
+}
+
+// =========================================================
+// قسم الحسابات — منفصل تماماً عن شاشات الأوبريشن، بصلاحية خاصة بيه
+// =========================================================
+
+// قايمة "الغرض" القابلة للإدارة — أرضيات / برودكشن / ديكور... إلخ
+model EventPurpose {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  costEntries EventCostRecordEntry[]
+
+  @@map("event_purposes")
+}
+
+// بند "توتال" بسيط — اسم + مبلغ + ملاحظات، بيتضاف يدوي لكل حفلة على حسب احتياجها
+model EventCostItem {
+  id        String   @id @default(cuid())
+  eventId   String
+  label     String
+  amount    Float
+  notes     String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([eventId])
+  @@map("event_cost_items")
+}
+
+// قايمة أسماء بنود التوتال الشائعة القابلة للإدارة — عشان مايحتاجش يكتب نفس
+// الاسم من الصفر كل مرة (اجمالي عماله الديكور، اجمالي البدلات...)
+model EventCostItemTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("event_cost_item_templates")
+}
+enum EventCostCategory {
+  DECOR_LABOR
+  UNIFORMS
+  TRANSPORT
+  MICROBUS
+}
+
+// حركة يومية واحدة جوه أي تصنيف متراكم — بتتجمع كلها في إجمالي التصنيف
+model EventCostRecordEntry {
+  id          String            @id @default(cuid())
+  eventId     String
+  category    EventCostCategory
+  date        DateTime
+  typeLabel   String            // المهنة (نجار، حداد...) أو نوع السيارة (ميكروباص...)
+  purposeId   String?
+  count       Int
+  unitPrice   Float
+  total       Float             // count × unitPrice — محسوبة ومخزّنة وقت الحفظ
+  notes       String?
+  // لو الحركة دي جت تلقائي من سيارة نقل مسجّلة في إذن صرف/مرتجع/نقل عهدة —
+  // بنسجّل مصدرها هنا عشان (أ) نعرف نمنع استيرادها تاني، و(ب) نعرف نوضح
+  // مصدرها للمستخدم. الحركات اليدوية العادية بتفضل null في التلاتة دول.
+  sourceType         String?
+  sourceId           String?
+  sourceVehicleIndex Int?
+  userId      String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  purpose EventPurpose? @relation(fields: [purposeId], references: [id])
+  user    User          @relation(fields: [userId], references: [id])
+
+  @@index([eventId])
+  @@index([category])
+  @@index([purposeId])
+  @@index([sourceType, sourceId])
+  @@map("event_cost_record_entries")
+}

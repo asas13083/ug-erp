@@ -1,0 +1,30 @@
+const express = require('express');
+const router = express.Router();
+const ctrl = require('../controllers/reports.controller');
+const { requireAuth, requirePermission } = require('../middleware/auth');
+
+router.use(requireAuth);
+router.use(requirePermission('reports', 'view'));
+router.get('/stock.xlsx', ctrl.stockExcel);
+router.get('/events.xlsx', ctrl.eventsExcel);
+router.get('/warehouses.xlsx', ctrl.warehousesExcel);
+router.get('/issue-vouchers.xlsx', ctrl.issueVouchersExcel);
+router.get('/return-vouchers.xlsx', ctrl.returnVouchersExcel);
+router.get('/loss.xlsx', ctrl.lossExcel);
+router.get('/activity-log.xlsx', ctrl.activityLogExcel);
+router.get('/warehouse/:id.xlsx', ctrl.warehouseDetailExcel);
+router.get('/warehouse/:id/issued.xlsx', ctrl.warehouseIssuedExcel);
+router.get('/warehouse/:id/lost.xlsx', ctrl.warehouseLostExcel);
+router.get('/category/:id.xlsx', ctrl.categoryDetailExcel);
+router.get('/stock-counts.xlsx', ctrl.stockCountsExcel);
+router.get('/stock-transfers.xlsx', ctrl.stockTransfersExcel);
+router.get('/custody-transfers.xlsx', ctrl.custodyTransfersExcel);
+router.get('/transport-log.xlsx', ctrl.transportLogExcel);
+router.get('/damaged.xlsx', ctrl.damagedExcel);
+router.get('/period', ctrl.periodReport);
+router.get('/period.xlsx', ctrl.periodReportExcel);
+router.get('/event/:id.xlsx', ctrl.eventDetailExcel);
+router.get('/event/:id/full.xlsx', ctrl.eventDetailFullExcel);
+router.get('/client/:id.xlsx', ctrl.clientDetailExcel);
+
+module.exports = router;
