@@ -129,7 +129,7 @@ function SidebarContent({ user, can, openKey, setOpenKey, onNavigate }) {
   const { t } = useLanguage();
   return (
     <>
-      <div className="relative flex items-center gap-3 px-5 py-5 border-b border-white/10">
+      <div className="relative flex items-center gap-3 px-5 py-5 border-b border-white/10 flex-shrink-0">
         <img src="/ug-logo.jpg" alt="UG" className="w-10 h-10 rounded-xl object-cover shadow-lg animate-glow" />
         <div>
           <h1 className="text-sm font-extrabold text-white leading-tight">{t('UG Production House')}</h1>
@@ -266,14 +266,14 @@ export default function MainLayout() {
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-40 flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <div className="relative w-72 max-w-[80vw] h-full glass-dark flex flex-col overflow-hidden animate-fadein">
+          <div className="relative w-72 max-w-[80vw] h-full glass-dark flex flex-col overflow-y-auto animate-fadein">
             <button onClick={() => setMobileOpen(false)} className="absolute left-3 top-3 text-white p-1.5 z-10" aria-label="إغلاق">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
             <SidebarContent user={user} can={can} openKey={openKey} setOpenKey={setOpenKey} onNavigate={() => setMobileOpen(false)} />
-            <div className="relative px-4 py-3.5 border-t border-white/10 flex items-center gap-2.5">
+            <div className="relative px-4 py-3.5 border-t border-white/10 flex items-center gap-2.5 flex-shrink-0">
               {user?.avatarUrl ? (
                 <img src={getAssetUrl(user.avatarUrl)} alt="" className="w-8 h-8 rounded-full object-cover" />
               ) : (

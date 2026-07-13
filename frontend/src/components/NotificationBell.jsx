@@ -83,7 +83,7 @@ export default function NotificationBell() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center pt-16 px-3"
+          className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center pt-16 px-3 overflow-y-auto"
           onClick={() => setOpen(false)}
         >
           <div
