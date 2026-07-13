@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ug_erp}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-54154155}
       POSTGRES_DB: ${POSTGRES_DB:-ug_erp}
     volumes:
       # من PostgreSQL 18، مكان التخزين اتغيّر لـ /var/lib/postgresql (مش
