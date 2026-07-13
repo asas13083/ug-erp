@@ -23,6 +23,39 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* ============ تحسينات بصرية عامة — بتأثر على كل الشاشات مرة واحدة ============ */
+
+/* تركيز أنيق موحّد على كل الحقول والأزرار، بدل الإطار الأزرق الافتراضي
+   للمتصفح اللي بيدّي إحساس "بدائي" — ده أكبر فرق بصري بأقل مجهود */
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+input, select, textarea {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+/* انتقال سلس لأي زرار أو رابط بيتغيّر شكله عند المرور عليه (hover)، بدل
+   التغيير المفاجئ اللي بيحس المستخدم إنه "خشن" */
+button, a {
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ظل أعمق شوية وأنعم للنوافذ المنبثقة (Modals) — بيدّي إحساس "طبقات" حقيقي
+   بدل النوافذ اللي بتبان "لاصقة" على الصفحة */
+.shadow-xl {
+  box-shadow: 0 12px 40px -8px rgba(15, 23, 42, 0.22), 0 4px 12px -4px rgba(15, 23, 42, 0.1);
+}
+
+/* خلفية النوافذ المنبثقة — ضبابية أنعم شوية بدل الأسود الغامق المباشر */
+.backdrop-blur-sm {
+  backdrop-filter: blur(6px) saturate(1.1);
+  -webkit-backdrop-filter: blur(6px) saturate(1.1);
+}
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
