@@ -82,7 +82,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute left-0 mt-2 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-fadein">
+        <div className={`absolute ${lang === 'ar' ? 'right-0' : 'left-0'} mt-2 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-fadein`}>
           <div className="px-4 py-3 border-b border-gray-100 font-extrabold text-sm">{t('آخر التحديثات')}</div>
           <div className="max-h-96 overflow-y-auto">
             {logs.map((l) => {

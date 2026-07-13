@@ -33,6 +33,7 @@ import EventCostDetailPage from './pages/EventCostDetailPage';
 import AccountsComparisonPage from './pages/AccountsComparisonPage';
 import EventPurposesPage from './pages/EventPurposesPage';
 import EventCostItemTemplatesPage from './pages/EventCostItemTemplatesPage';
+import LogsPage from './pages/LogsPage';
 import EventsCalendarPage from './pages/EventsCalendarPage';
 import CompanySettingsPage from './pages/CompanySettingsPage';
 import TrashPage from './pages/TrashPage';
@@ -92,6 +93,7 @@ export default function App() {
         <Route path="users/:id" element={<ProtectedRoute module="users"><UserDetailPage /></ProtectedRoute>} />
         <Route path="roles" element={<ProtectedRoute module="users"><RolesPage /></ProtectedRoute>} />
         <Route path="backups" element={<ProtectedRoute module="settings"><BackupPage /></ProtectedRoute>} />
+        <Route path="logs" element={<ProtectedRoute module="settings"><LogsPage /></ProtectedRoute>} />
         <Route path="company-settings" element={<ProtectedRoute module="settings"><CompanySettingsPage /></ProtectedRoute>} />
         <Route path="trash" element={<ProtectedRoute module="settings"><TrashPage /></ProtectedRoute>} />
       </Route>

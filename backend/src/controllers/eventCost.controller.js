@@ -68,16 +68,21 @@ const getTransportSuggestions = asyncHandler(async (req, res) => {
   function addSuggestions(vouchers, sourceType, sourceLabelPrefix) {
     vouchers.forEach((v) => {
       const list = Array.isArray(v.vehicles) ? v.vehicles : [];
-      list.forEach((vehicleDesc, idx) => {
+      list.forEach((vehicleEntry, idx) => {
         const key = `${sourceType}|${v.id}|${idx}`;
         if (importedSet.has(key)) return; // اتضافت قبل كده، مش نقترحها تاني
+        // توافق مع بيانات قديمة كانت مجرد نص بس (بدون عدد) — نعتبرها عدد 1
+        const typeLabel = typeof vehicleEntry === 'string' ? vehicleEntry : vehicleEntry?.type;
+        const count = typeof vehicleEntry === 'string' ? 1 : Number(vehicleEntry?.count) || 1;
+        if (!typeLabel) return;
         suggestions.push({
           sourceType,
           sourceId: v.id,
           sourceVehicleIndex: idx,
           sourceLabel: `${sourceLabelPrefix} ${v.number}`,
           date: v.createdAt,
-          typeLabel: vehicleDesc,
+          typeLabel,
+          count,
         });
       });
     });
@@ -154,7 +159,44 @@ const createEntry = asyncHandler(async (req, res) => {
     throw new AppError('العدد لازم يكون أكبر من صفر، والسعر رقم غير سالب', 400);
   }
 
-  const entry = await prisma.eventCostRecordEntry.create({
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // دمج تلقائي: لو فيه حركة موجودة بالفعل بنفس التصنيف والنوع واليوم والسعر
+  // (زي "عربية كبيرة" بـ500 جنيه في نفس اليوم)، بنزوّد عددها بدل ما نكرر سطر
+  // جديد منفصل — ده بيحصل تلقائي سواء الحركة داخلة يدوي أو مستوردة من إذن
+  const existingMatch = await prisma.eventCostRecordEntry.findFirst({
+    where: { eventId, category, typeLabel, unitPrice: priceNum, purposeId: purposeId || null, date: { gte: dayStart, lte: dayEnd } },
+  });
+
+  let entry;
+  if (existingMatch) {
+    const newCount = existingMatch.count + countNum;
+    entry = await prisma.eventCostRecordEntry.update({
+      where: { id: existingMatch.id },
+      data: {
+        count: newCount,
+        total: newCount * priceNum,
+        notes: notes || existingMatch.notes,
+        // لو الحركة القديمة معندهاش مصدر (يدوية) والجديدة عندها، نسجّل المصدر
+        // — مهم عشان تتبّع "اتستوردت قبل كده" يفضل شغال صح
+        ...(!existingMatch.sourceType && sourceType && { sourceType, sourceId, sourceVehicleIndex }),
+      },
+      include: { purpose: true },
+    });
+    await logActivity({
+      action: 'UPDATE',
+      entityType: 'EventCostRecordEntry',
+      entityId: entry.id,
+      description: `دمج حركة ${CATEGORY_LABELS[category]}: ${typeLabel} — العدد بقى ${newCount} بدل ما يتكرر سطر جديد`,
+      userId: req.user.id,
+    });
+    return res.status(201).json({ success: true, merged: true, data: entry });
+  }
+
+  entry = await prisma.eventCostRecordEntry.create({
     data: {
       eventId,
       category,

@@ -84,7 +84,7 @@ describe('قسم الحسابات — كشوفات تكاليف الحفلات',
         warehouseId: fx.warehouse.id,
         eventId: fx.eventA.id,
         recipientName: 'فني',
-        vehicles: ['عربية كبيرة', 'ربع نقل'],
+        vehicles: [{ type: 'عربية كبيرة', count: 1 }, { type: 'ربع نقل', count: 1 }],
         items: [{ itemId: fx.item.id, quantity: 5 }],
       })
       .expect(201);
@@ -119,5 +119,58 @@ describe('قسم الحسابات — كشوفات تكاليف الحفلات',
     const row = res.body.data.find((e) => e.id === fx.eventA.id);
     expect(row.costsTotal).toBe(400);
     expect(row.laborDaysCount).toBe(2);
+  });
+
+  test('سيارة نقل بعدد أكبر من واحد بتتحسب صح (السعر × العدد)', async () => {
+    await agent
+      .post('/api/issue-vouchers')
+      .send({
+        warehouseId: fx.warehouse.id,
+        eventId: fx.eventA.id,
+        recipientName: 'فني',
+        vehicles: [{ type: 'عربية كبيرة', count: 5 }],
+        items: [{ itemId: fx.item.id, quantity: 5 }],
+      })
+      .expect(201);
+
+    const suggestions = await agent.get(`/api/event-costs/${fx.eventA.id}/transport-suggestions`).expect(200);
+    expect(suggestions.body.data).toHaveLength(1);
+    expect(suggestions.body.data[0].count).toBe(5);
+
+    const s = suggestions.body.data[0];
+    const created = await agent
+      .post(`/api/event-costs/${fx.eventA.id}/entries`)
+      .send({ category: 'TRANSPORT', date: s.date, typeLabel: s.typeLabel, count: s.count, unitPrice: 200, sourceType: s.sourceType, sourceId: s.sourceId, sourceVehicleIndex: s.sourceVehicleIndex })
+      .expect(201);
+    expect(created.body.data.total).toBe(1000); // 5 × 200
+  });
+
+  test('إضافة حركتين بنفس النوع واليوم والسعر بتتدمج في سطر واحد بدل تكرار', async () => {
+    const first = await agent
+      .post(`/api/event-costs/${fx.eventA.id}/entries`)
+      .send({ category: 'TRANSPORT', date: '2026-07-15', typeLabel: 'ربع نقل', count: 2, unitPrice: 300 })
+      .expect(201);
+    expect(first.body.merged).toBeFalsy();
+
+    const second = await agent
+      .post(`/api/event-costs/${fx.eventA.id}/entries`)
+      .send({ category: 'TRANSPORT', date: '2026-07-15', typeLabel: 'ربع نقل', count: 3, unitPrice: 300 })
+      .expect(201);
+    expect(second.body.merged).toBe(true);
+    expect(second.body.data.id).toBe(first.body.data.id); // نفس السطر، مش سطر جديد
+    expect(second.body.data.count).toBe(5); // 2 + 3
+    expect(second.body.data.total).toBe(1500); // 5 × 300
+
+    const entries = await agent.get(`/api/event-costs/${fx.eventA.id}/entries`).query({ category: 'TRANSPORT' }).expect(200);
+    expect(entries.body.data.entries).toHaveLength(1); // سطر واحد بس مش اتنين
+  });
+
+  test('حركتين بنفس النوع بس سعر مختلف أو يوم مختلف مايتدمجوش', async () => {
+    await agent.post(`/api/event-costs/${fx.eventA.id}/entries`).send({ category: 'TRANSPORT', date: '2026-07-15', typeLabel: 'ربع نقل', count: 1, unitPrice: 300 }).expect(201);
+    await agent.post(`/api/event-costs/${fx.eventA.id}/entries`).send({ category: 'TRANSPORT', date: '2026-07-15', typeLabel: 'ربع نقل', count: 1, unitPrice: 350 }).expect(201);
+    await agent.post(`/api/event-costs/${fx.eventA.id}/entries`).send({ category: 'TRANSPORT', date: '2026-07-16', typeLabel: 'ربع نقل', count: 1, unitPrice: 300 }).expect(201);
+
+    const entries = await agent.get(`/api/event-costs/${fx.eventA.id}/entries`).query({ category: 'TRANSPORT' }).expect(200);
+    expect(entries.body.data.entries).toHaveLength(3); // كلهم منفصلين لأن السعر أو اليوم مختلف
   });
 });

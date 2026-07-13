@@ -124,7 +124,7 @@ export default function EventCostDetailPage() {
         category: 'TRANSPORT',
         date: importingSuggestion.date.slice(0, 10),
         typeLabel: importingSuggestion.typeLabel,
-        count: 1,
+        count: importingSuggestion.count || 1,
         unitPrice: Number(importPrice),
         sourceType: importingSuggestion.sourceType,
         sourceId: importingSuggestion.sourceId,
@@ -428,6 +428,7 @@ export default function EventCostDetailPage() {
                     <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-xs">
                       <div>
                         <span className="font-bold">{s.typeLabel}</span>
+                        {s.count > 1 && <span className="text-blue-600 font-bold"> ×{s.count}</span>}
                         <span className="text-gray-500"> — {s.sourceLabel} · {new Date(s.date).toLocaleDateString(locale)}</span>
                       </div>
                       <button onClick={() => openImportForm(s)} className="text-blue-600 font-bold hover:underline">{t('استيراد')}</button>
@@ -617,12 +618,20 @@ export default function EventCostDetailPage() {
           <form onClick={(e) => e.stopPropagation()} onSubmit={confirmImport} className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-3.5 shadow-xl">
             <h3 className="font-extrabold text-lg">{t('سعر السيارة')}</h3>
             <div className="text-sm bg-gray-50 rounded-lg px-3 py-2">
-              <div className="font-bold">{importingSuggestion.typeLabel}</div>
+              <div className="font-bold flex items-center justify-between">
+                <span>{importingSuggestion.typeLabel}</span>
+                {importingSuggestion.count > 1 && <span className="text-blue-600">×{importingSuggestion.count}</span>}
+              </div>
               <div className="text-xs text-gray-600 mt-0.5">{importingSuggestion.sourceLabel} · {new Date(importingSuggestion.date).toLocaleDateString(locale)}</div>
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1 text-gray-600">{t('السعر')}</label>
+              <label className="block text-xs font-bold mb-1 text-gray-600">
+                {importingSuggestion.count > 1 ? t('سعر السيارة الواحدة') : t('السعر')}
+              </label>
               <input required autoFocus type="number" min={0} value={importPrice} onChange={(e) => setImportPrice(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              {importingSuggestion.count > 1 && Number(importPrice) > 0 && (
+                <div className="text-xs text-gray-500 mt-1">{t('الإجمالي')}: {(Number(importPrice) * importingSuggestion.count).toLocaleString()} {t('جنيه')}</div>
+              )}
             </div>
             <div className="flex gap-2 pt-2">
               <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition">{t('استيراد')}</button>

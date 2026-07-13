@@ -1,20 +1,20 @@
 import { useLanguage } from '../context/LanguageContext';
 
 /**
- * مكوّن إدخال بنود سيارات النقل — كل عربية سطر لوحدها بوصفها الخاص
- * (مش نفس النوع بالضرورة، ممكن "عربية كبيرة" و"ربع نقل" مع بعض في نفس الإذن).
- * value: array of strings, onChange: (newArray) => void
+ * مكوّن إدخال بنود سيارات النقل — كل سطر نوع سيارة + عدده (مش سطر لكل عربية
+ * لوحدها زي الأول). يعني "5 عربية كبيرة" بقى سطر واحد بعدد 5، مش 5 أسطر مكررة.
+ * value: array of { type, count }, onChange: (newArray) => void
  */
 export default function VehiclesInput({ value = [], onChange }) {
   const { t } = useLanguage();
 
-  function updateLine(idx, text) {
+  function updateLine(idx, field, val) {
     const next = [...value];
-    next[idx] = text;
+    next[idx] = { ...next[idx], [field]: val };
     onChange(next);
   }
   function addLine() {
-    onChange([...value, '']);
+    onChange([...value, { type: '', count: 1 }]);
   }
   function removeLine(idx) {
     onChange(value.filter((_, i) => i !== idx));
@@ -26,18 +26,27 @@ export default function VehiclesInput({ value = [], onChange }) {
       <div className="space-y-2">
         {value.map((v, idx) => (
           <div key={idx} className="flex gap-2 items-center">
-            <span className="text-xs text-gray-500 w-14 flex-shrink-0">{t('عربية')} {idx + 1}</span>
             <input
-              value={v}
-              onChange={(e) => updateLine(idx, e.target.value)}
+              value={v.type || ''}
+              onChange={(e) => updateLine(idx, 'type', e.target.value)}
               placeholder={t('مثلاً: عربية كبيرة')}
               className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
             />
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className="text-xs text-gray-500">{t('العدد')}</span>
+              <input
+                type="number"
+                min={1}
+                value={v.count ?? 1}
+                onChange={(e) => updateLine(idx, 'count', Math.max(1, Number(e.target.value) || 1))}
+                className="w-16 border border-gray-200 rounded-lg px-2 py-2 text-sm text-center"
+              />
+            </div>
             <button type="button" onClick={() => removeLine(idx)} className="text-rose-500 text-sm px-1.5">{t('حذف')}</button>
           </div>
         ))}
       </div>
-      <button type="button" onClick={addLine} className="text-blue-600 text-xs font-bold mt-2">+ {t('إضافة عربية')}</button>
+      <button type="button" onClick={addLine} className="text-blue-600 text-xs font-bold mt-2">+ {t('إضافة نوع سيارة')}</button>
     </div>
   );
 }

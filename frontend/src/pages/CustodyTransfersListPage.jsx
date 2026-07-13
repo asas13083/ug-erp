@@ -73,7 +73,11 @@ export default function CustodyTransfersListPage() {
     setReceiverName(ct.receiverName);
     setHandedByUserId(ct.handedByUserId || '');
     setReceivedByUserId(ct.receivedByUserId || '');
-    setVehicles(Array.isArray(ct.vehicles) ? ct.vehicles : []);
+    setVehicles(
+      Array.isArray(ct.vehicles)
+        ? ct.vehicles.map((x) => (typeof x === 'string' ? { type: x, count: 1 } : x)) // توافق مع بيانات قديمة كانت نص بس
+        : []
+    );
     setNotes(ct.notes || '');
     setError('');
     setLines(ct.items.map((i) => ({ itemId: i.itemId, name: i.item.name, unit: i.item.unit, quantity: i.quantity })));

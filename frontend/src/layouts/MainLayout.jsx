@@ -68,6 +68,7 @@ const NAV_GROUPS = [
       { to: '/users', label: 'المستخدمون', module: 'users' },
       { to: '/roles', label: 'الأدوار والصلاحيات', module: 'users' },
       { to: '/backups', label: 'النسخ الاحتياطي', module: 'settings' },
+      { to: '/logs', label: 'سجل الأخطاء', module: 'settings' },
       { to: '/company-settings', label: 'إعدادات الشركة', module: 'settings' },
       { to: '/trash', label: 'سلة المهملات', module: 'settings' },
     ],

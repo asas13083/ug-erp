@@ -38,10 +38,11 @@ services:
       PG_DUMP_PATH: ""
       PSQL_PATH: ""
     volumes:
-      # نسخ احتياطية وملفات مرفوعة بتتخزن على السيرفر نفسه، برّه الحاوية —
+      # نسخ احتياطية وملفات مرفوعة وسجلات بتتخزن على السيرفر نفسه، برّه الحاوية —
       # عشان لو الحاوية اتبنت تاني، البيانات دي متضيعش
       - ./backend/backups:/app/backups
       - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
     expose:
       - '4000'
 

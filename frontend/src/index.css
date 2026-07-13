@@ -26,3 +26,25 @@ body {
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+
+/* إصلاح خانات التاريخ على الموبايل — بعض المتصفحات (خصوصاً أندرويد كروم)
+   بتخلي النص يبان باهت جداً أو يتقص بسبب مساحة أيقونة التقويم الداخلية.
+   الإعدادات دي بتضمن مساحة كافية للنص ولون واضح مهما كان حجم الشاشة */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  color: #1f2937;
+  min-height: 40px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: #1f2937;
+  opacity: 1;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+}

@@ -96,7 +96,11 @@ export default function ReturnVouchersListPage() {
   function openEdit(v) {
     setEditingVoucher(v);
     setNotes(v.notes || '');
-    setVehicles(Array.isArray(v.vehicles) ? v.vehicles : []);
+    setVehicles(
+      Array.isArray(v.vehicles)
+        ? v.vehicles.map((x) => (typeof x === 'string' ? { type: x, count: 1 } : x)) // توافق مع بيانات قديمة كانت نص بس
+        : []
+    );
     setError('');
     setLines(
       v.items.map((i) => ({

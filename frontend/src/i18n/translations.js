@@ -1000,4 +1000,17 @@ Object.assign(translations, {
   },
 });
 
+// ============ سجل الأخطاء ============
+Object.assign(translations, {
+  'سجل الأخطاء': { en: 'Error Log' },
+  'آخر 100 خطأ حقيقي حصل في السيرفر — لو حصلت مشكلة، هتلاقي تفاصيلها هنا من غير ما تحتاج تدخل السيرفر': {
+    en: 'The last 100 real server errors — if a problem occurs, find the details here without needing to access the server',
+  },
+  'تحديث': { en: 'Refresh' },
+  'مفيش أي أخطاء مسجّلة — كل حاجة شغّالة تمام': { en: 'No errors recorded — everything is working fine' },
+  'إضافة نوع سيارة': { en: 'Add Vehicle Type' },
+  'جنيه': { en: 'EGP' },
+  'سعر السيارة الواحدة': { en: 'Price per Vehicle' },
+});
+
 export default translations;

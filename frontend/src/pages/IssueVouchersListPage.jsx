@@ -102,7 +102,11 @@ export default function IssueVouchersListPage() {
     setEditingVoucher(v);
     setRecipientName(v.recipientName);
     setNotes(v.notes || '');
-    setVehicles(Array.isArray(v.vehicles) ? v.vehicles : []);
+    setVehicles(
+      Array.isArray(v.vehicles)
+        ? v.vehicles.map((x) => (typeof x === 'string' ? { type: x, count: 1 } : x)) // توافق مع بيانات قديمة كانت نص بس
+        : []
+    );
     setError('');
     const { data } = await api.get(`/warehouses/${v.warehouseId}/stock`);
     setWarehouseItems(data.data);

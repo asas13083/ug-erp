@@ -19,7 +19,7 @@ const STATUS_LABELS = {
   CANCELLED: ['ملغاة', 'bg-gray-100 text-gray-600'],
 };
 
-const EMPTY_FORM = { name: '', clientId: '', location: '', startDate: '', endDate: '', status: 'PLANNED', notes: '' };
+const EMPTY_FORM = { name: '', clientId: '', location: '', startDate: '', endDate: '', status: 'ONGOING', notes: '' };
 
 function toDateInput(d) {
   return d ? new Date(d).toISOString().slice(0, 10) : '';
@@ -189,7 +189,6 @@ export default function EventsPage() {
             </div>
             {editingId && (
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="PLANNED">{t('مخطط لها')}</option>
                 <option value="ONGOING">{t('جارية الآن')}</option>
                 <option value="CLOSED">{t('مغلقة')}</option>
                 <option value="CANCELLED">{t('ملغاة')}</option>
