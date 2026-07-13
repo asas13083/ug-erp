@@ -28,6 +28,9 @@ export default function NotificationBell() {
   const [logs, setLogs] = useState([]);
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(() => localStorage.getItem(LAST_SEEN_KEY) || new Date(0).toISOString());
+  // لقطة من "آخر مرة شافها" وقت ما فتح النافذة بالظبط — عشان نعرف نميّز
+  // الإشعارات الجديدة بصرياً وهو فاتح، من غير ما "قراءتها فوراً" تلغي التمييز
+  const [displayLastSeen, setDisplayLastSeen] = useState(lastSeen);
   const ref = useRef(null);
 
   function load() {
@@ -52,6 +55,7 @@ export default function NotificationBell() {
 
   function toggleOpen() {
     const next = !open;
+    if (next) setDisplayLastSeen(lastSeen); // خد اللقطة قبل ما نحدّث lastSeen تحت
     setOpen(next);
     if (next) {
       const now = new Date().toISOString();
@@ -83,34 +87,39 @@ export default function NotificationBell() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center pt-16 px-3 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:w-96 max-w-full bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden animate-fadein"
+            className="w-full sm:w-96 max-w-full max-h-[80vh] bg-white rounded-2xl shadow-xl overflow-hidden animate-modalpop flex flex-col"
           >
-          <div className="px-4 py-3 border-b border-gray-100 font-extrabold text-sm">{t('آخر التحديثات')}</div>
-          <div className="max-h-96 overflow-y-auto">
-            {logs.map((l) => {
-              const clickable = !!resolveActivityLink(l);
-              return (
-                <div
-                  key={l.id}
-                  onClick={() => handleLogClick(l)}
-                  className={`px-4 py-2.5 border-b border-gray-50 last:border-0 flex gap-2 items-start ${clickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                >
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 whitespace-nowrap mt-0.5">{t(ACTION_LABELS[l.action] || l.action)}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-800 leading-snug">{l.description}</div>
-                    <div className="text-[10px] text-gray-600 mt-0.5">{l.user?.fullName} · {timeAgo(l.createdAt, t, locale)}</div>
+            <div className="px-4 py-3.5 border-b border-gray-100 font-extrabold text-sm flex items-center justify-between flex-shrink-0">
+              {t('آخر التحديثات')}
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700 transition text-lg leading-none px-1">×</button>
+            </div>
+            <div className="overflow-y-auto">
+              {logs.map((l) => {
+                const clickable = !!resolveActivityLink(l);
+                const isUnread = new Date(l.createdAt) > new Date(displayLastSeen);
+                return (
+                  <div
+                    key={l.id}
+                    onClick={() => handleLogClick(l)}
+                    className={`px-4 py-2.5 border-b border-gray-50 last:border-0 flex gap-2.5 items-start transition-colors ${clickable ? 'cursor-pointer hover:bg-gray-50' : ''} ${isUnread ? 'bg-blue-50/40' : ''}`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: isUnread ? '#2563eb' : 'transparent' }} />
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 whitespace-nowrap mt-0.5 flex-shrink-0">{t(ACTION_LABELS[l.action] || l.action)}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs leading-snug ${isUnread ? 'text-gray-900 font-bold' : 'text-gray-700'}`}>{l.description}</div>
+                      <div className="text-[10px] text-gray-500 mt-0.5">{l.user?.fullName} · {timeAgo(l.createdAt, t, locale)}</div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            {logs.length === 0 && <div className="text-center py-8 text-gray-600 text-xs">{t('مفيش تحديثات لسه')}</div>}
+                );
+              })}
+              {logs.length === 0 && <div className="text-center py-8 text-gray-600 text-xs">{t('مفيش تحديثات لسه')}</div>}
+            </div>
           </div>
-        </div>
         </div>
       )}
     </div>

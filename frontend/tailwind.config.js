@@ -12,6 +12,13 @@ export default {
       },
       keyframes: {
         fadein: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+        // حركة أنيقة (انزلاق + تكبير خفيف) — لبطاقات النوافذ نفسها بس، مش
+        // لأي حاوية بتلف حواليها نوافذ تانية (عشان متكررش مشكلة "التحويل
+        // الدائم" اللي كسرت مكان كل النوافذ قبل كده)
+        modalpop: {
+          '0%': { opacity: 0, transform: 'translateY(6px) scale(0.98)' },
+          '100%': { opacity: 1, transform: 'translateY(0) scale(1)' },
+        },
         blob: {
           '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
           '33%': { transform: 'translate(20px, -25px) scale(1.08)' },
@@ -21,6 +28,7 @@ export default {
       },
       animation: {
         fadein: 'fadein 0.25s ease-out both',
+        modalpop: 'modalpop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both',
         blob: 'blob 12s infinite ease-in-out',
         glow: 'glow 4s infinite ease-in-out',
       },

@@ -1011,6 +1011,7 @@ Object.assign(translations, {
   'إضافة نوع سيارة': { en: 'Add Vehicle Type' },
   'جنيه': { en: 'EGP' },
   'سعر السيارة الواحدة': { en: 'Price per Vehicle' },
+  'مش عايز أرجع الصنف ده دلوقتي': { en: "Don't return this item right now" },
 });
 
 export default translations;

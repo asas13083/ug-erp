@@ -49,6 +49,12 @@ export default function ReturnVoucherPage() {
     setLines((prev) => ({ ...prev, [itemId]: { ...prev[itemId], [field]: Number(value) } }));
   }
 
+  // حذف صنف من القائمة خالص — يعني "مش عايز أرجعه دلوقتي أصلاً"، مش مجرد
+  // كمية صفر. لو غيّرت رأيك، اختار نفس الحفلة تاني من فوق وهو هيرجع يظهر
+  function removeItem(itemId) {
+    setPendingItems((prev) => prev.filter((s) => s.itemId !== itemId));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -150,6 +156,9 @@ export default function ReturnVoucherPage() {
                   <div className="text-xs text-rose-500 w-24 text-left">
                     {t('فاقد')}: {Math.max(s.pending - (lines[s.itemId]?.returnedQuantity ?? 0) - (lines[s.itemId]?.damagedQuantity ?? 0), 0)}
                   </div>
+                  <button type="button" onClick={() => removeItem(s.itemId)} title={t('مش عايز أرجع الصنف ده دلوقتي')} className="text-rose-500 hover:text-rose-700 text-lg font-bold px-1 flex-shrink-0">
+                    ×
+                  </button>
                 </div>
               ))}
             </div>

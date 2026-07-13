@@ -20,7 +20,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute bottom-0 -left-20 w-72 h-72 rounded-full bg-slate-400/15 blur-3xl animate-blob" style={{ animationDelay: '2.5s' }} />
       <div className="pointer-events-none absolute top-1/3 left-1/2 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl animate-blob" style={{ animationDelay: '5s' }} />
 
-      <div className="relative w-full max-w-sm glass rounded-3xl p-8 animate-fadein" style={{ background: 'rgba(255,255,255,0.9)' }}>
+      <div className="relative w-full max-w-sm glass rounded-3xl p-8 animate-modalpop" style={{ background: 'rgba(255,255,255,0.9)' }}>
         <div className="flex flex-col items-center mb-8">
           <img src="/ug-logo.jpg" alt="UG" className="w-16 h-16 rounded-2xl object-cover shadow-lg mb-3 animate-glow" />
           <h1 className="text-lg font-extrabold text-ink">UG Production House</h1>

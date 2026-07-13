@@ -65,7 +65,7 @@ export default function GlobalSearch() {
       </div>
 
       {open && q.trim().length >= 2 && (
-        <div className="absolute left-0 mt-2 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-fadein">
+        <div className="absolute left-0 mt-2 w-80 max-w-[90vw] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-modalpop">
           <div className="max-h-96 overflow-y-auto">
             {!hasResults && <div className="text-center py-8 text-gray-600 text-xs">{t('لا توجد نتائج مطابقة')}</div>}
             {Object.entries(results).map(([category, items]) => {
