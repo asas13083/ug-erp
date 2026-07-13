@@ -82,11 +82,14 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <>
-          {/* خلفية شفافة تقفل النافذة لو دست برّاها — بتحل مشكلة تراكب النافذة
-              فوق باقي الصفحة على الموبايل، وبتخليها تحس إنها "نافذة" منظمة */}
-          <div className="fixed inset-0 z-40 bg-black/20 md:hidden" onClick={() => setOpen(false)} />
-          <div className="fixed md:absolute inset-x-3 md:inset-x-auto top-16 md:top-auto left-0 md:mt-2 md:w-80 max-w-full md:max-w-[90vw] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-fadein">
+        <div
+          className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center pt-16 px-3"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:w-96 max-w-full bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden animate-fadein"
+          >
           <div className="px-4 py-3 border-b border-gray-100 font-extrabold text-sm">{t('آخر التحديثات')}</div>
           <div className="max-h-96 overflow-y-auto">
             {logs.map((l) => {
@@ -108,7 +111,7 @@ export default function NotificationBell() {
             {logs.length === 0 && <div className="text-center py-8 text-gray-600 text-xs">{t('مفيش تحديثات لسه')}</div>}
           </div>
         </div>
-        </>
+        </div>
       )}
     </div>
   );
