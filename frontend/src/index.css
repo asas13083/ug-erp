@@ -35,6 +35,8 @@ input[type="time"],
 input[type="datetime-local"],
 input[type="month"] {
   color: #1f2937;
+  background-color: #fff;
+  color-scheme: light; /* يمنع وضع الموبايل الداكن من عرض الخانة بخلفية غامقة ونص مختفي */
   min-height: 40px;
   -webkit-appearance: none;
   appearance: none;

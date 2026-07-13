@@ -463,6 +463,7 @@ export default function EventCostDetailPage() {
                     </div>
                   </button>
                   {isOpen && (
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-white text-gray-500 text-[11px] border-t border-gray-100">
@@ -495,6 +496,7 @@ export default function EventCostDetailPage() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </div>
               );
