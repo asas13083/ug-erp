@@ -263,6 +263,7 @@ model Event {
   status        EventStatus @default(PLANNED)
   responsibleId String?
   notes         String?
+  logoUrl       String? // لوجو خاص بالحفلة — بيظهر جنب لوجو الشركة في المستندات
   expectedBudget Float?  // الميزانية المتوقعة — لمقارنتها بالمصروف الفعلي في قسم الحسابات
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt

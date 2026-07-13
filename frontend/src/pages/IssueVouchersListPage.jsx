@@ -84,7 +84,7 @@ export default function IssueVouchersListPage() {
         <tbody>${rows}</tbody>
       </table>
       `,
-      { docNumber: v.number, clientLogoUrl: getAssetUrl(v.event?.client?.logoUrl), clientName: v.event?.client?.name, filename: `اذن-صرف-${v.number}.pdf` }
+      { docNumber: v.number, clientLogoUrl: getAssetUrl(v.event?.client?.logoUrl), clientName: v.event?.client?.name, eventLogoUrl: getAssetUrl(v.event?.logoUrl), filename: `اذن-صرف-${v.number}.pdf` }
     );
   }
 

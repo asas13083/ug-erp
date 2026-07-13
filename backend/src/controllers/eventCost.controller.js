@@ -1,3 +1,4 @@
+const path = require('path');
 const prisma = require('../lib/prisma');
 const asyncHandler = require('../utils/asyncHandler');
 const { AppError } = require('../utils/errors');
@@ -426,11 +427,17 @@ const exportExcel = asyncHandler(async (req, res) => {
 
   const meta = [event.client?.name, event.number, new Date(event.startDate).toLocaleDateString('ar-EG')].filter(Boolean).join(' — ');
 
+  // لوجو الحفلة (لو موجود) — المسار في قاعدة البيانات نسبي (/uploads/xxx.jpg)،
+  // فبنحوّله لمسار حقيقي على القرص عشان ExcelJS يقدر يقراه
+  const eventLogoPath = event.logoUrl
+    ? path.join(__dirname, '../..', event.logoUrl.replace(/^\//, ''))
+    : undefined;
+
   const buffer = await buildExcelReport(
     `كشف حسابات - ${event.name} (${meta})`,
     ['البند/التصنيف', 'التاريخ', 'النوع', 'الغرض', 'العدد', 'السعر', 'الإجمالي'],
     rows,
-    { highlightRows }
+    { highlightRows, eventLogoPath }
   );
   sendXlsx(res, `كشف-حسابات-${event.name}`, buffer);
 });

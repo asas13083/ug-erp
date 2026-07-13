@@ -35,6 +35,21 @@ async function buildExcelReport(title, headers, rows, options = {}) {
     console.warn('تعذر تضمين اللوجو في ملف Excel:', err.message);
   }
 
+  // لوجو الحفلة (لو موجود) — بيتحط في وسط الرأس، جنب لوجو الشركة
+  if (options.eventLogoPath) {
+    try {
+      const ext = path.extname(options.eventLogoPath).replace('.', '').toLowerCase();
+      const eventImageId = workbook.addImage({
+        filename: options.eventLogoPath,
+        extension: ext === 'jpg' ? 'jpeg' : ext,
+      });
+      const middleCol = Math.max(Math.floor(headers.length / 2), 1);
+      sheet.addImage(eventImageId, { tl: { col: middleCol, row: 0.15 }, ext: { width: 54, height: 54 } });
+    } catch (err) {
+      console.warn('تعذر تضمين لوجو الحفلة في ملف Excel:', err.message);
+    }
+  }
+
   sheet.getRow(1).height = 28;
   sheet.mergeCells(1, 2, 1, Math.max(headers.length, 3));
   const titleCell = sheet.getCell(1, 2);

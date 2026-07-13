@@ -365,6 +365,11 @@ export default function ItemsPage() {
                   {uploadingImage ? t('جاري الرفع...') : form.imageUrl ? t('تغيير الصورة') : t('رفع صورة')}
                   <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleItemImageUpload} disabled={uploadingImage} className="hidden" />
                 </label>
+                {form.imageUrl && (
+                  <button type="button" onClick={() => setForm({ ...form, imageUrl: '' })} className="text-rose-500 hover:text-rose-700 text-xs font-bold px-2 py-2 transition">
+                    {t('حذف الصورة')}
+                  </button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

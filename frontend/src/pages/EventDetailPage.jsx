@@ -64,7 +64,7 @@ export default function EventDetailPage() {
     downloadPdf(
       `ملخص أصناف — ${esc(event.name)}`,
       `<table><thead><tr><th>الصنف</th><th>خرج</th><th>رجع سليم</th><th>تالف</th><th>فاقد</th><th>نقل عهدة</th><th>لسه برا</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table>`,
-      { docNumber: event.number, clientLogoUrl: getAssetUrl(event.client?.logoUrl), clientName: event.client?.name, filename: `ملخص-حفلة-${event.name}.pdf` }
+      { docNumber: event.number, clientLogoUrl: getAssetUrl(event.client?.logoUrl), clientName: event.client?.name, eventLogoUrl: getAssetUrl(event.logoUrl), filename: `ملخص-حفلة-${event.name}.pdf` }
     );
   }
 

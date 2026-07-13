@@ -91,7 +91,7 @@ export default function NotificationBell() {
           <div className="fixed inset-0 z-40 bg-black/20 sm:hidden" onClick={() => setOpen(false)} />
           <div
             onClick={(e) => e.stopPropagation()}
-            className="fixed sm:absolute inset-x-3 sm:inset-x-auto top-16 sm:top-auto left-0 sm:mt-2 sm:w-96 max-w-full sm:max-w-[90vw] max-h-[75vh] sm:max-h-[32rem] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-modalpop flex flex-col"
+            className="fixed sm:absolute inset-x-3 sm:inset-x-auto top-16 bottom-3 sm:bottom-auto sm:top-auto left-0 sm:mt-2 sm:w-96 max-w-full sm:max-w-[90vw] sm:max-h-[32rem] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-modalpop flex flex-col"
           >
             <div className="px-4 py-3.5 border-b border-gray-100 font-extrabold text-sm flex items-center justify-between flex-shrink-0">
               {t('آخر التحديثات')}

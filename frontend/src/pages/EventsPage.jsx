@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader';
 import Pagination from '../components/Pagination';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { getAssetUrl } from '../utils/assetUrl';
 
 const SETTLEMENT_DOT = {
   settled: ['bg-emerald-500', 'اتقفلت بالكامل — كل اللي خرج رجع أو اتسجل'],
@@ -19,7 +20,7 @@ const STATUS_LABELS = {
   CANCELLED: ['ملغاة', 'bg-gray-100 text-gray-600'],
 };
 
-const EMPTY_FORM = { name: '', clientId: '', location: '', startDate: '', endDate: '', status: 'ONGOING', notes: '' };
+const EMPTY_FORM = { name: '', clientId: '', location: '', startDate: '', endDate: '', status: 'ONGOING', notes: '', logoUrl: '' };
 
 function toDateInput(d) {
   return d ? new Date(d).toISOString().slice(0, 10) : '';
@@ -37,6 +38,7 @@ export default function EventsPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [assignedUserIds, setAssignedUserIds] = useState([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState('');
 
   function load() {
@@ -69,10 +71,29 @@ export default function EventsPage() {
       endDate: toDateInput(ev.endDate),
       status: ev.status,
       notes: ev.notes || '',
+      logoUrl: ev.logoUrl || '',
     });
     setShowForm(true);
     const { data } = await api.get(`/events/${ev.id}/assignments`);
     setAssignedUserIds(data.data.map((a) => a.userId));
+  }
+
+  // رفع لوجو خاص بالحفلة — بيظهر جنب لوجو الشركة في مستندات PDF وExcel
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await api.post('/uploads', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setForm((f) => ({ ...f, logoUrl: data.data.url }));
+    } catch (err) {
+      setError(err.response?.data?.message || t('تعذر رفع الصورة'));
+    } finally {
+      setUploadingLogo(false);
+    }
   }
 
   function toggleAssignedUser(userId) {
@@ -200,6 +221,22 @@ export default function EventsPage() {
                 <option value="CANCELLED">{t('ملغاة')}</option>
               </select>
             )}
+
+            <div>
+              <label className="block text-xs font-bold mb-1.5 text-gray-600">{t('لوجو الحفلة (اختياري)')}</label>
+              <div className="flex items-center gap-3">
+                {form.logoUrl && <img src={getAssetUrl(form.logoUrl)} alt="" className="w-12 h-12 rounded-lg object-contain border border-gray-200 bg-white" />}
+                <label className="border border-gray-200 hover:border-gray-300 text-xs font-bold px-3 py-2 rounded-lg transition cursor-pointer">
+                  {uploadingLogo ? t('جاري الرفع...') : form.logoUrl ? t('تغيير الصورة') : t('رفع صورة')}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} disabled={uploadingLogo} className="hidden" />
+                </label>
+                {form.logoUrl && (
+                  <button type="button" onClick={() => setForm({ ...form, logoUrl: '' })} className="text-rose-500 hover:text-rose-700 text-xs font-bold px-2 py-2 transition">
+                    {t('حذف الصورة')}
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div>
               <label className="block text-xs font-bold mb-1.5 text-gray-600">{t('الأوبريشن المعيّنين على الحفلة (اختياري)')}</label>

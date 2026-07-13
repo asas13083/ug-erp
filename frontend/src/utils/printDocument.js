@@ -24,7 +24,7 @@ const PAGE_HEIGHT_PT = 841.89;
 const SHEET_WIDTH_PX = 780; // عرض الورقة الثابت في الـ CSS
 const PAGE_HEIGHT_PX = (PAGE_HEIGHT_PT * SHEET_WIDTH_PX) / PAGE_WIDTH_PT;
 
-function buildHeaderAndBodyHtml(title, bodyHtml, { docNumber, clientLogoUrl, clientName, company } = {}) {
+function buildHeaderAndBodyHtml(title, bodyHtml, { docNumber, clientLogoUrl, clientName, eventLogoUrl, company } = {}) {
   const companyName = esc(company?.companyName || 'UG Production House');
 
   return `
@@ -33,6 +33,7 @@ function buildHeaderAndBodyHtml(title, bodyHtml, { docNumber, clientLogoUrl, cli
         <img src="${UG_LOGO_DATA_URI}" alt="UG" />
         <div class="brand-text"><b>${companyName}</b>Inventory ERP</div>
       </div>
+      ${eventLogoUrl ? `<img class="event-logo" src="${eventLogoUrl}" alt="event logo" crossorigin="anonymous" />` : ''}
       <div style="display:flex; align-items:center; gap:16px;">
         ${clientLogoUrl || clientName ? `
           <div class="client-block">
@@ -76,6 +77,7 @@ const DOCUMENT_STYLES = `
   .brand-block .brand-text b { display: block; font-size: 14px; color: #12151C; }
   .client-block { display: flex; align-items: center; gap: 8px; }
   .client-logo { height: 40px; width: auto; border-radius: 6px; opacity: .9; }
+  .event-logo { height: 46px; width: auto; object-fit: contain; }
   .client-name { font-size: 13px; font-weight: 700; color: #12151C; }
   .doc-title-block { text-align: left; }
   .doc-title-block h1 { font-size: 19px; margin: 0 0 4px; color: #12151C; }

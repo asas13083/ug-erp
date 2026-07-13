@@ -263,6 +263,7 @@ export default function EventCostDetailPage() {
       {
         docNumber: event.number,
         clientLogoUrl: event.client?.logoUrl ? getAssetUrl(event.client.logoUrl) : undefined,
+        eventLogoUrl: event.logoUrl ? getAssetUrl(event.logoUrl) : undefined,
         clientName: event.client?.name,
         filename: `كشف-حسابات-${event.name}.pdf`,
       }
@@ -288,6 +289,7 @@ export default function EventCostDetailPage() {
       {
         docNumber: event.number,
         clientLogoUrl: event.client?.logoUrl ? getAssetUrl(event.client.logoUrl) : undefined,
+        eventLogoUrl: event.logoUrl ? getAssetUrl(event.logoUrl) : undefined,
         clientName: event.client?.name,
         filename: `${CATEGORY_LABELS_AR[expandedCategory]}-${event.name}.pdf`,
       }

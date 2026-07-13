@@ -1015,6 +1015,8 @@ Object.assign(translations, {
   'من أصل': { en: 'out of' },
   'فاقد فعلي (اختياري)': { en: 'Actual Loss (optional)' },
   'هيفضل معلّق': { en: 'Stays pending' },
+  'حذف الصورة': { en: 'Remove Image' },
+  'لوجو الحفلة (اختياري)': { en: 'Event Logo (optional)' },
 });
 
 export default translations;

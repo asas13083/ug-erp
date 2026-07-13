@@ -99,7 +99,7 @@ const setAssignments = asyncHandler(async (req, res) => {
  *         reservations: [{ itemId, warehouseId, quantity }] }
  */
 const create = asyncHandler(async (req, res) => {
-  const { name, clientId, location, startDate, endDate, responsibleId, notes, reservations = [], assignedUserIds = [] } = req.body;
+  const { name, clientId, location, startDate, endDate, responsibleId, notes, logoUrl, reservations = [], assignedUserIds = [] } = req.body;
 
   if (!name || !clientId || !startDate || !endDate) {
     throw new AppError('اسم الحفلة والعميل وتاريخ البداية والنهاية حقول مطلوبة', 400);
@@ -111,7 +111,7 @@ const create = asyncHandler(async (req, res) => {
   const event = await prisma.$transaction(async (tx) => {
     const number = await generateCode('event');
     const created = await tx.event.create({
-      data: { number, name, clientId, location, startDate: new Date(startDate), endDate: new Date(endDate), responsibleId, notes },
+      data: { number, name, clientId, location, startDate: new Date(startDate), endDate: new Date(endDate), responsibleId, notes, logoUrl: logoUrl || null },
     });
 
     if (assignedUserIds.length > 0) {
@@ -151,7 +151,7 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const { name, location, startDate, endDate, status, responsibleId, notes, expectedBudget } = req.body;
+  const { name, location, startDate, endDate, status, responsibleId, notes, expectedBudget, logoUrl } = req.body;
   const event = await prisma.$transaction(async (tx) => {
     const existing = await tx.event.findUnique({ where: { id: req.params.id }, include: { reservations: true } });
     if (!existing) throw new AppError('الحفلة غير موجودة', 404);
@@ -164,6 +164,7 @@ const update = asyncHandler(async (req, res) => {
         status,
         responsibleId,
         notes,
+        ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
         ...(expectedBudget !== undefined && { expectedBudget: expectedBudget === '' || expectedBudget === null ? null : Number(expectedBudget) }),
         ...(startDate && { startDate: new Date(startDate) }),
         ...(endDate && { endDate: new Date(endDate) }),
