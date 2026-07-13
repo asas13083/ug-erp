@@ -1012,6 +1012,9 @@ Object.assign(translations, {
   'جنيه': { en: 'EGP' },
   'سعر السيارة الواحدة': { en: 'Price per Vehicle' },
   'مش عايز أرجع الصنف ده دلوقتي': { en: "Don't return this item right now" },
+  'من أصل': { en: 'out of' },
+  'فاقد فعلي (اختياري)': { en: 'Actual Loss (optional)' },
+  'هيفضل معلّق': { en: 'Stays pending' },
 });
 
 export default translations;

@@ -39,7 +39,7 @@ export default function ReturnVoucherPage() {
         const stillOut = data.data.itemsSummary.filter((s) => s.pending > 0);
         setPendingItems(stillOut);
         const initLines = {};
-        stillOut.forEach((s) => { initLines[s.itemId] = { returnedQuantity: s.pending, damagedQuantity: 0 }; });
+        stillOut.forEach((s) => { initLines[s.itemId] = { returnedQuantity: s.pending, damagedQuantity: 0, lostQuantity: 0 }; });
         setLines(initLines);
       })
       .finally(() => setLoadingItems(false));
@@ -61,12 +61,20 @@ export default function ReturnVoucherPage() {
     setSuccess('');
     setSubmitting(true);
     try {
-      const items = pendingItems.map((s) => ({
-        itemId: s.itemId,
-        issuedQuantity: s.pending,
-        returnedQuantity: lines[s.itemId]?.returnedQuantity ?? 0,
-        damagedQuantity: lines[s.itemId]?.damagedQuantity ?? 0,
-      }));
+      // مهم جداً: بنبعت issuedQuantity = سليم + تالف + فاقد (اللي بيتعامل معاه
+      // فعلياً دلوقتي بس)، مش كل "لسه برا" — عشان أي كمية متذكرتش صراحة
+      // تفضل "لسه معلّقة"، مش تتحول فاقد تلقائي من غير ما تقصد
+      const items = pendingItems.map((s) => {
+        const returned = lines[s.itemId]?.returnedQuantity ?? 0;
+        const damaged = lines[s.itemId]?.damagedQuantity ?? 0;
+        const lost = lines[s.itemId]?.lostQuantity ?? 0;
+        return {
+          itemId: s.itemId,
+          issuedQuantity: returned + damaged + lost,
+          returnedQuantity: returned,
+          damagedQuantity: damaged,
+        };
+      });
       const { data } = await api.post('/return-vouchers', { eventId, warehouseId, vehicles, handedByUserId: handedByUserId || undefined, receivedByUserId: receivedByUserId || undefined, items });
       setSuccess(`${t('تم تسجيل المرتجع بنجاح — رقم الإذن:')} ${data.data.number}`);
       setEventId('');
@@ -146,15 +154,19 @@ export default function ReturnVoucherPage() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-[10px] text-gray-600">{t('سليم')}</label>
-                    <input type="number" min={0} max={s.pending} value={lines[s.itemId]?.returnedQuantity ?? 0} onChange={(e) => updateLine(s.itemId, 'returnedQuantity', e.target.value)} className="w-20 border border-gray-200 rounded px-2 py-1 text-sm" />
+                    <label className="block text-[10px] text-gray-600">{t('سليم')} ({t('من أصل')} {s.pending})</label>
+                    <input type="number" min={0} max={s.pending} value={lines[s.itemId]?.returnedQuantity ?? 0} onChange={(e) => updateLine(s.itemId, 'returnedQuantity', e.target.value)} className="w-24 border border-gray-200 rounded px-2 py-1 text-sm font-bold text-center" />
                   </div>
                   <div>
                     <label className="block text-[10px] text-gray-600">{t('تالف')}</label>
                     <input type="number" min={0} value={lines[s.itemId]?.damagedQuantity ?? 0} onChange={(e) => updateLine(s.itemId, 'damagedQuantity', e.target.value)} className="w-20 border border-gray-200 rounded px-2 py-1 text-sm" />
                   </div>
-                  <div className="text-xs text-rose-500 w-24 text-left">
-                    {t('فاقد')}: {Math.max(s.pending - (lines[s.itemId]?.returnedQuantity ?? 0) - (lines[s.itemId]?.damagedQuantity ?? 0), 0)}
+                  <div>
+                    <label className="block text-[10px] text-gray-600">{t('فاقد فعلي (اختياري)')}</label>
+                    <input type="number" min={0} value={lines[s.itemId]?.lostQuantity ?? 0} onChange={(e) => updateLine(s.itemId, 'lostQuantity', e.target.value)} className="w-20 border border-gray-200 rounded px-2 py-1 text-sm" />
+                  </div>
+                  <div className="text-xs text-blue-600 w-28 text-left">
+                    {t('هيفضل معلّق')}: {Math.max(s.pending - (lines[s.itemId]?.returnedQuantity ?? 0) - (lines[s.itemId]?.damagedQuantity ?? 0) - (lines[s.itemId]?.lostQuantity ?? 0), 0)}
                   </div>
                   <button type="button" onClick={() => removeItem(s.itemId)} title={t('مش عايز أرجع الصنف ده دلوقتي')} className="text-rose-500 hover:text-rose-700 text-lg font-bold px-1 flex-shrink-0">
                     ×
