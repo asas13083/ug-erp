@@ -86,18 +86,11 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-modalpop"
-          >
-            <div className="px-4 py-3.5 border-b border-gray-100 font-extrabold text-sm flex items-center justify-between flex-shrink-0">
-              {t('آخر التحديثات')}
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700 transition text-lg leading-none px-1">×</button>
-            </div>
+        <>
+          {/* طبقة شفافة تقفل النافذة لو دست في أي مكان تاني */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 mt-2 w-96 max-w-[calc(100vw-1.5rem)] max-h-[70vh] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-modalpop flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-100 font-extrabold text-sm flex-shrink-0">{t('آخر التحديثات')}</div>
             <div className="overflow-y-auto">
               {logs.map((l) => {
                 const clickable = !!resolveActivityLink(l);
@@ -120,7 +113,7 @@ export default function NotificationBell() {
               {logs.length === 0 && <div className="text-center py-8 text-gray-600 text-xs">{t('مفيش تحديثات لسه')}</div>}
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
