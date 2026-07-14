@@ -846,11 +846,16 @@ model SupplierPayment {
   date       DateTime
   notes      String?
   userId     String
+  // اختياري — لو الدفعة دي بخصوص حفلة معيّنة بالتحديد، عشان "المستحق" في
+  // كشف الحفلة نفسها ياخدها في الاعتبار (مش بس المستحق العام للمورد)
+  eventId    String?
   createdAt  DateTime @default(now())
 
   supplier Supplier @relation(fields: [supplierId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
+  event    Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([supplierId])
+  @@index([eventId])
   @@map("supplier_payments")
 }

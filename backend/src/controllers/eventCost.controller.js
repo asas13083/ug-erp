@@ -24,10 +24,12 @@ const getSummary = asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new AppError('الحفلة غير موجودة', 404);
 
-  const [costItems, entries, supplierEntries] = await Promise.all([
+  const [costItems, entries, supplierEntries, directSupplierPayments] = await Promise.all([
     prisma.eventCostItem.findMany({ where: { eventId }, orderBy: { createdAt: 'asc' }, include: { user: { select: { fullName: true } } } }),
     prisma.eventCostRecordEntry.findMany({ where: { eventId }, select: { category: true, total: true } }),
     prisma.eventSupplierEntry.findMany({ where: { eventId }, select: { total: true, paidAmount: true } }),
+    // دفعات اتسجّلت من ملف المورد مباشرة وربطناها بالحفلة دي (مش جوه فاتورة)
+    prisma.supplierPayment.findMany({ where: { eventId }, select: { amount: true } }),
   ]);
 
   const categoryTotals = {};
@@ -35,9 +37,12 @@ const getSummary = asyncHandler(async (req, res) => {
   entries.forEach((e) => { categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.total; });
 
   // الموردين — تصنيف مستقل بره enum التصنيفات المتراكمة، بس بيتحسب في
-  // الإجمالي الكلي زيهم بالظبط. وبنحسب كمان المستحق (غير المدفوع) للحفلة دي
+  // الإجمالي الكلي زيهم بالظبط. وبنحسب كمان المستحق (غير المدفوع) للحفلة دي،
+  // شامل أي دفعات مباشرة اتسجّلت من ملف المورد نفسه ومربوطة بالحفلة دي
   const suppliersTotal = supplierEntries.reduce((s, e) => s + e.total, 0);
-  const suppliersPaid = supplierEntries.reduce((s, e) => s + e.paidAmount, 0);
+  const suppliersPaid =
+    supplierEntries.reduce((s, e) => s + e.paidAmount, 0) +
+    directSupplierPayments.reduce((s, p) => s + p.amount, 0);
   const suppliersDue = suppliersTotal - suppliersPaid;
 
   const itemsTotal = costItems.reduce((s, i) => s + i.amount, 0);

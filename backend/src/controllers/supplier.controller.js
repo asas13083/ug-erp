@@ -35,14 +35,25 @@ function buildLines(rawLines) {
 
 const listEventEntries = asyncHandler(async (req, res) => {
   const { eventId } = req.params;
-  const entries = await prisma.eventSupplierEntry.findMany({
-    where: { eventId },
-    include: ENTRY_INCLUDE,
-    orderBy: { date: 'asc' },
-  });
+  const [entries, directPayments] = await Promise.all([
+    prisma.eventSupplierEntry.findMany({
+      where: { eventId },
+      include: ENTRY_INCLUDE,
+      orderBy: { date: 'asc' },
+    }),
+    // دفعات اتسجّلت من ملف المورد مباشرة وربطناها بالحفلة دي بالتحديد (مش
+    // جوه فاتورة) — لازم تتحسب هي كمان في "المدفوع" عشان المستحق يبقى صح
+    prisma.supplierPayment.findMany({
+      where: { eventId },
+      include: { supplier: { select: { id: true, name: true } }, user: { select: { fullName: true } } },
+      orderBy: { date: 'asc' },
+    }),
+  ]);
   const total = entries.reduce((s, e) => s + e.total, 0);
-  const paid = entries.reduce((s, e) => s + e.paidAmount, 0);
-  res.json({ success: true, data: { entries, total, paid, due: total - paid } });
+  const paidWithInvoices = entries.reduce((s, e) => s + e.paidAmount, 0);
+  const directPaid = directPayments.reduce((s, p) => s + p.amount, 0);
+  const paid = paidWithInvoices + directPaid;
+  res.json({ success: true, data: { entries, directPayments, total, paid, due: total - paid } });
 });
 
 const createEventEntry = asyncHandler(async (req, res) => {
@@ -302,7 +313,7 @@ const getSupplierProfile = asyncHandler(async (req, res) => {
     }),
     prisma.supplierPayment.findMany({
       where: { supplierId: id },
-      include: { user: { select: { fullName: true } } },
+      include: { user: { select: { fullName: true } }, event: { select: { id: true, name: true, number: true } } },
       orderBy: { date: 'desc' },
     }),
   ]);
@@ -319,6 +330,12 @@ const getSupplierProfile = asyncHandler(async (req, res) => {
     row.total += e.total;
     row.paid += e.paidAmount;
     row.count += 1;
+  });
+  // دفعات مباشرة مربوطة بحفلة معيّنة — تتحسب في "المدفوع" الخاص بالحفلة دي كمان
+  payments.forEach((p) => {
+    if (!p.eventId) return;
+    if (!byEvent.has(p.eventId)) byEvent.set(p.eventId, { event: p.event, total: 0, paid: 0, count: 0 });
+    byEvent.get(p.eventId).paid += p.amount;
   });
 
   res.json({
@@ -360,7 +377,7 @@ const listWithBalances = asyncHandler(async (req, res) => {
 
 const createPayment = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { amount, date, notes } = req.body;
+  const { amount, date, notes, eventId } = req.body;
 
   const amountNum = Number(amount);
   if (!Number.isFinite(amountNum) || amountNum <= 0) throw new AppError('مبلغ الدفعة لازم يكون أكبر من صفر', 400);
@@ -369,9 +386,14 @@ const createPayment = asyncHandler(async (req, res) => {
   const supplier = await prisma.supplier.findFirst({ where: { id, deletedAt: null } });
   if (!supplier) throw new AppError('المورد غير موجود', 404);
 
+  if (eventId) {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new AppError('الحفلة غير موجودة', 404);
+  }
+
   const payment = await prisma.supplierPayment.create({
-    data: { supplierId: id, amount: amountNum, date: new Date(date), notes, userId: req.user.id },
-    include: { user: { select: { fullName: true } } },
+    data: { supplierId: id, amount: amountNum, date: new Date(date), notes, userId: req.user.id, eventId: eventId || null },
+    include: { user: { select: { fullName: true } }, event: { select: { id: true, name: true, number: true } } },
   });
 
   await logActivity({

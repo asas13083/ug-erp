@@ -18,7 +18,7 @@ export default function SupplierDetailPage() {
   const [error, setError] = useState('');
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+  const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '', eventId: '' });
 
   function load() {
     setLoading(true);
@@ -37,9 +37,10 @@ export default function SupplierDetailPage() {
         amount: Number(payForm.amount),
         date: payForm.date,
         notes: payForm.notes || undefined,
+        eventId: payForm.eventId || undefined,
       });
       setShowPaymentForm(false);
-      setPayForm({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+      setPayForm({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '', eventId: '' });
       load();
     } catch (err) {
       setError(err.response?.data?.message || t('حصل خطأ'));
@@ -202,6 +203,7 @@ export default function SupplierDetailPage() {
                 <tr className="bg-gray-50 text-gray-500 text-[11px]">
                   <th className="text-right px-4 py-2.5 font-bold">{t('التاريخ')}</th>
                   <th className="text-right px-4 py-2.5 font-bold">{t('المبلغ')}</th>
+                  <th className="text-right px-4 py-2.5 font-bold">{t('عن حفلة')}</th>
                   <th className="text-right px-4 py-2.5 font-bold">{t('ملاحظات')}</th>
                   <th className="text-right px-4 py-2.5 font-bold">{t('سجّلها')}</th>
                   <th className="text-right px-4 py-2.5 font-bold w-20">{t('إجراءات')}</th>
@@ -212,6 +214,13 @@ export default function SupplierDetailPage() {
                   <tr key={p.id} className="border-t border-gray-50">
                     <td className="px-4 py-2.5 text-xs text-gray-600">{new Date(p.date).toLocaleDateString(locale)}</td>
                     <td className="px-4 py-2.5 font-extrabold text-emerald-600">{p.amount.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-xs">
+                      {p.event ? (
+                        <Link to={`/event-costs/${p.event.id}`} className="text-blue-600 hover:underline">{p.event.name}</Link>
+                      ) : (
+                        <span className="text-gray-400">{t('عامة')}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-xs text-gray-600">{p.notes || '—'}</td>
                     <td className="px-4 py-2.5 text-xs text-gray-600">{p.user?.fullName || '—'}</td>
                     <td className="px-4 py-2.5">
@@ -222,7 +231,7 @@ export default function SupplierDetailPage() {
                   </tr>
                 ))}
                 {payments.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-500 text-sm">{t('مفيش دفعات لسه')}</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-500 text-sm">{t('مفيش دفعات لسه')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -243,6 +252,21 @@ export default function SupplierDetailPage() {
             <div>
               <label className="block text-xs font-bold mb-1 text-gray-600">{t('المبلغ')}</label>
               <input required autoFocus type="number" min={0} step="any" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1 text-gray-600">
+                {t('عن حفلة معيّنة؟')} <span className="font-normal text-gray-500">({t('اختياري')})</span>
+              </label>
+              <select value={payForm.eventId} onChange={(e) => setPayForm({ ...payForm, eventId: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <option value="">{t('دفعة عامة (مش لحفلة بعينها)')}</option>
+                {events.map((row) => (
+                  <option key={row.event.id} value={row.event.id}>{row.event.name} — {row.event.number}</option>
+                ))}
+              </select>
+              <div className="text-[11px] text-gray-500 mt-1">
+                {t('لو الدفعة دي مقابل حفلة معيّنة، اختارها عشان "المستحق" يظهر صح جوه كشف حساب الحفلة نفسها')}
+              </div>
             </div>
 
             <div>
