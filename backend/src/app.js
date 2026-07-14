@@ -35,6 +35,9 @@ const { categoryRouter, clientRouter, supplierRouter, emailRecipientRouter, even
 const eventCostRoutes = require('./routes/eventCost.routes');
 
 const app = express();
+// محتاجينها لأن Nginx بيقف قدام الباك إند (Reverse Proxy) — من غيرها، أدوات
+// زي express-rate-limit بترفض تحديد هوية الطلبات صح وترمي أخطاء بصمت
+app.set('trust proxy', 1);
 
 app.use(helmet({ crossOriginResourcePolicy: false })); // معطّل جزئياً عشان صور اللوجو تتحمل في تبويبات تانية
 // ملحوظة أمان مهمة: مينفعش نستخدم origin: '*' مع credentials:true — المتصفح
