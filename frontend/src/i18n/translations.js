@@ -1064,4 +1064,32 @@ Object.assign(translations, {
   'مفيش تعاملات لسه': { en: 'No transactions yet' },
 });
 
+// ============ واردات الموردين وأصناف الفواتير ============
+Object.assign(translations, {
+  'واردات الموردين': { en: 'Supplier Deliveries' },
+  'الأصناف اللي جت من الموردين — إيه جه، من مين، لأي حفلة': { en: 'Items received from suppliers — what, from whom, for which event' },
+  'أصناف الفاتورة': { en: 'Invoice Items' },
+  'إجمالي الفاتورة': { en: 'Invoice Total' },
+  'صورة الفاتورة (اختياري)': { en: 'Invoice Image (optional)' },
+  'الفاتورة': { en: 'Invoice' },
+  'أضف للمخزن': { en: 'Add to Warehouse' },
+  'إضافة للمخزن': { en: 'Add to Warehouse' },
+  'اتضاف': { en: 'Added' },
+  'اتضاف للمخزن': { en: 'Added to Warehouse' },
+  'لسه ماتضافش': { en: 'Not Added Yet' },
+  'لسه': { en: 'Pending' },
+  'مفيش واردات': { en: 'No deliveries' },
+  'فيه': { en: 'There are' },
+  'صنف جه من موردين ولسه ماتضافش للمخزن': { en: 'items from suppliers not yet added to warehouse' },
+  'الصنف ده': { en: 'This item' },
+  'موجود عندي بالفعل': { en: 'Already exists' },
+  'اختر الصنف': { en: 'Select Item' },
+  'اختر التصنيف': { en: 'Select Category' },
+  'وحدة القياس': { en: 'Unit' },
+  'قطعة': { en: 'piece' },
+  'لو فيه صنف بنفس الاسم والتصنيف موجود، الكمية هتتضاف عليه بدل ما يتكرر': {
+    en: 'If an item with the same name and category exists, the quantity will be added to it instead of duplicating',
+  },
+});
+
 export default translations;

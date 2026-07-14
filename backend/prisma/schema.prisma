@@ -796,11 +796,10 @@ model EventSupplierEntry {
   eventId     String
   supplierId  String
   date        DateTime
-  description String   // الوصف: تصوير، إيجار كراسي، فرقة موسيقية...
-  count       Int      @default(1)
-  unitPrice   Float
-  total       Float    // count × unitPrice — محسوبة ومخزّنة وقت الحفظ
+  description String   // وصف الفاتورة: تصوير، توريد خشب، إيجار كراسي...
+  total       Float    // مجموع كل بنود الفاتورة — محسوبة ومخزّنة وقت الحفظ
   paidAmount  Float    @default(0) // كام اتدفع فعلاً من الفاتورة دي (0 = آجل بالكامل)
+  imageUrl    String?  // صورة الفاتورة (اختياري)
   notes       String?
   userId      String
   createdAt   DateTime @default(now())
@@ -809,10 +808,33 @@ model EventSupplierEntry {
   event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
+  lines    EventSupplierEntryLine[]
 
   @@index([eventId])
   @@index([supplierId])
   @@map("event_supplier_entries")
+}
+
+// بند واحد جوه فاتورة مورد — اسم الصنف، العدد، وحدة القياس، السعر
+model EventSupplierEntryLine {
+  id          String  @id @default(cuid())
+  entryId     String
+  itemName    String  // اسم الصنف زي ما المورد كتبه (مش لازم يكون صنف مسجّل عندنا)
+  unit        String  @default("قطعة")
+  count       Float
+  unitPrice   Float
+  total       Float   // count × unitPrice
+  // لو أمين المخزن ضاف البند ده للمخزن فعلاً — بنسجّل فين وامتى، عشان
+  // (أ) منضيفوش مرتين بالغلط، و(ب) نعرف نتتبّع مصدر الكمية دي
+  addedToWarehouseId String?
+  addedAt            DateTime?
+  addedByUserId      String?
+  createdItemId      String?   // الصنف اللي اتعمل/اتحدّث في المخزون
+
+  entry EventSupplierEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@map("event_supplier_entry_lines")
 }
 
 // دفعة لاحقة لمورد — مش مرتبطة بفاتورة واحدة بعينها، دي دفعة عامة على

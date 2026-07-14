@@ -89,6 +89,7 @@ app.use('/api/items', itemRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/categories', categoryRouter);
 app.use('/api/clients', clientRouter);
+app.use('/api/supplier-deliveries', require('./routes/supplierDelivery.routes'));
 app.use('/api/suppliers', require('./routes/supplierProfile.routes'));
 app.use('/api/suppliers', supplierRouter);
 app.use('/api/email-recipients', emailRecipientRouter);

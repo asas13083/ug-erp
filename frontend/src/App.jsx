@@ -36,6 +36,7 @@ import EventCostItemTemplatesPage from './pages/EventCostItemTemplatesPage';
 import LogsPage from './pages/LogsPage';
 import SuppliersPage from './pages/SuppliersPage';
 import SupplierDetailPage from './pages/SupplierDetailPage';
+import SupplierDeliveriesPage from './pages/SupplierDeliveriesPage';
 import EventsCalendarPage from './pages/EventsCalendarPage';
 import CompanySettingsPage from './pages/CompanySettingsPage';
 import TrashPage from './pages/TrashPage';
@@ -98,6 +99,7 @@ export default function App() {
         <Route path="logs" element={<ProtectedRoute module="settings"><LogsPage /></ProtectedRoute>} />
         <Route path="suppliers" element={<ProtectedRoute module="suppliers"><SuppliersPage /></ProtectedRoute>} />
         <Route path="suppliers/:id" element={<ProtectedRoute module="suppliers"><SupplierDetailPage /></ProtectedRoute>} />
+        <Route path="supplier-deliveries" element={<ProtectedRoute module="items"><SupplierDeliveriesPage /></ProtectedRoute>} />
         <Route path="company-settings" element={<ProtectedRoute module="settings"><CompanySettingsPage /></ProtectedRoute>} />
         <Route path="trash" element={<ProtectedRoute module="settings"><TrashPage /></ProtectedRoute>} />
       </Route>

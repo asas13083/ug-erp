@@ -38,7 +38,9 @@ export default function EventCostDetailPage() {
   const [suppliersList, setSuppliersList] = useState([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [editingSupplierEntry, setEditingSupplierEntry] = useState(null);
-  const [supForm, setSupForm] = useState({ supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', count: 1, unitPrice: '', paidAmount: 0, notes: '' });
+  const [supForm, setSupForm] = useState({ supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', paidAmount: 0, imageUrl: '', notes: '' });
+  const [supLines, setSupLines] = useState([{ itemName: '', unit: 'قطعة', count: 1, unitPrice: '' }]);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
 
   const [categoryEntries, setCategoryEntries] = useState({ entries: [], total: 0 });
   const [categoryPurposeFilter, setCategoryPurposeFilter] = useState('');
@@ -116,7 +118,7 @@ export default function EventCostDetailPage() {
   useEffect(() => {
     if (showSuppliers) {
       loadSupplierEntries();
-      api.get('/suppliers').then(({ data }) => setSuppliersList(data.data.data || data.data)).catch(() => {});
+      api.get('/suppliers').then(({ data }) => setSuppliersList(data.data)).catch(() => {});
     }
   }, [showSuppliers, eventId]);
 
@@ -128,14 +130,48 @@ export default function EventCostDetailPage() {
             supplierId: entry.supplierId,
             date: entry.date.slice(0, 10),
             description: entry.description,
-            count: entry.count,
-            unitPrice: entry.unitPrice,
             paidAmount: entry.paidAmount,
+            imageUrl: entry.imageUrl || '',
             notes: entry.notes || '',
           }
-        : { supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', count: 1, unitPrice: '', paidAmount: 0, notes: '' }
+        : { supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', paidAmount: 0, imageUrl: '', notes: '' }
+    );
+    setSupLines(
+      entry && entry.lines?.length
+        ? entry.lines.map((l) => ({ itemName: l.itemName, unit: l.unit, count: l.count, unitPrice: l.unitPrice }))
+        : [{ itemName: '', unit: 'قطعة', count: 1, unitPrice: '' }]
     );
     setShowSupplierForm(true);
+  }
+
+  // ============ بنود الفاتورة ============
+  function updateSupLine(idx, field, value) {
+    setSupLines((prev) => prev.map((l, i) => (i === idx ? { ...l, [field]: value } : l)));
+  }
+  function addSupLine() {
+    setSupLines((prev) => [...prev, { itemName: '', unit: 'قطعة', count: 1, unitPrice: '' }]);
+  }
+  function removeSupLine(idx) {
+    setSupLines((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
+  }
+  const supLinesTotal = supLines.reduce((s, l) => s + (Number(l.count) || 0) * (Number(l.unitPrice) || 0), 0);
+
+  // رفع صورة الفاتورة
+  async function handleInvoiceUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingInvoice(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await api.post('/uploads', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSupForm((f) => ({ ...f, imageUrl: data.data.url }));
+    } catch (err) {
+      setError(err.response?.data?.message || t('تعذر رفع الصورة'));
+    } finally {
+      setUploadingInvoice(false);
+    }
   }
 
   async function saveSupplierEntry(e) {
@@ -146,10 +182,15 @@ export default function EventCostDetailPage() {
         supplierId: supForm.supplierId,
         date: supForm.date,
         description: supForm.description,
-        count: Number(supForm.count) || 1,
-        unitPrice: Number(supForm.unitPrice),
         paidAmount: Number(supForm.paidAmount) || 0,
+        imageUrl: supForm.imageUrl || undefined,
         notes: supForm.notes || undefined,
+        lines: supLines.map((l) => ({
+          itemName: l.itemName,
+          unit: l.unit || 'قطعة',
+          count: Number(l.count) || 0,
+          unitPrice: Number(l.unitPrice) || 0,
+        })),
       };
       if (editingSupplierEntry) {
         await api.put(`/event-costs/suppliers/${editingSupplierEntry.id}`, payload);
@@ -521,9 +562,8 @@ export default function EventCostDetailPage() {
                   <tr className="bg-gray-50 text-gray-500 text-[11px]">
                     <th className="text-right px-3 py-2 font-bold">{t('المورد')}</th>
                     <th className="text-right px-3 py-2 font-bold">{t('التاريخ')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('الوصف')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('العدد')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('السعر')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('الفاتورة')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('الأصناف')}</th>
                     <th className="text-right px-3 py-2 font-bold">{t('الإجمالي')}</th>
                     <th className="text-right px-3 py-2 font-bold">{t('المدفوع')}</th>
                     <th className="text-right px-3 py-2 font-bold">{t('المتبقي')}</th>
@@ -534,18 +574,34 @@ export default function EventCostDetailPage() {
                   {supplierEntries.entries.map((e) => {
                     const due = e.total - e.paidAmount;
                     return (
-                      <tr key={e.id} className="border-t border-gray-50">
-                        <td className="px-3 py-2 font-bold">
+                      <tr key={e.id} className="border-t border-gray-50 align-top">
+                        <td className="px-3 py-2.5 font-bold">
                           <Link to={`/suppliers/${e.supplierId}`} className="text-blue-600 hover:underline">{e.supplier.name}</Link>
                         </td>
-                        <td className="px-3 py-2 text-xs text-gray-600">{new Date(e.date).toLocaleDateString(locale)}</td>
-                        <td className="px-3 py-2">{e.description}</td>
-                        <td className="px-3 py-2">{e.count}</td>
-                        <td className="px-3 py-2">{e.unitPrice.toLocaleString()}</td>
-                        <td className="px-3 py-2 font-bold">{e.total.toLocaleString()}</td>
-                        <td className="px-3 py-2 text-emerald-600">{e.paidAmount.toLocaleString()}</td>
-                        <td className={`px-3 py-2 font-bold ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{new Date(e.date).toLocaleDateString(locale)}</td>
+                        <td className="px-3 py-2.5">
+                          <div>{e.description}</div>
+                          {e.imageUrl && (
+                            <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
+                              <img src={getAssetUrl(e.imageUrl)} alt="" className="w-10 h-10 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
+                            </a>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="space-y-0.5">
+                            {(e.lines || []).map((l) => (
+                              <div key={l.id} className="text-xs">
+                                <span className="font-bold">{l.itemName}</span>
+                                <span className="text-gray-500"> — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}</span>
+                                {l.addedToWarehouseId && <span className="text-emerald-600 font-bold"> ✓</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-emerald-600 whitespace-nowrap">{e.paidAmount.toLocaleString()}</td>
+                        <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
+                        <td className="px-3 py-2.5">
                           <div className="flex gap-2">
                             {can('accounts', 'edit') && (
                               <button onClick={() => openSupplierForm(e)} className="text-blue-600 text-xs font-bold hover:underline">{t('تعديل')}</button>
@@ -560,14 +616,14 @@ export default function EventCostDetailPage() {
                   })}
                   {supplierEntries.entries.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير موردين لسه')}</td>
+                      <td colSpan={8} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير موردين لسه')}</td>
                     </tr>
                   )}
                 </tbody>
                 {supplierEntries.entries.length > 0 && (
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 bg-gray-50 font-extrabold">
-                      <td colSpan={5} className="px-3 py-2.5">{t('الإجمالي')}</td>
+                      <td colSpan={4} className="px-3 py-2.5">{t('الإجمالي')}</td>
                       <td className="px-3 py-2.5">{supplierEntries.total.toLocaleString()}</td>
                       <td className="px-3 py-2.5 text-emerald-600">{supplierEntries.paid.toLocaleString()}</td>
                       <td className={`px-3 py-2.5 ${supplierEntries.due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{supplierEntries.due.toLocaleString()}</td>
@@ -827,23 +883,72 @@ export default function EventCostDetailPage() {
               <input required value={supForm.description} onChange={(e) => setSupForm({ ...supForm, description: e.target.value })} placeholder={t('مثلاً: تصوير، إيجار كراسي')} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold mb-1 text-gray-600">{t('العدد')}</label>
-                <input required type="number" min={1} value={supForm.count} onChange={(e) => setSupForm({ ...supForm, count: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            {/* ============ أصناف الفاتورة ============ */}
+            <div>
+              <label className="block text-xs font-bold mb-1.5 text-gray-600">{t('أصناف الفاتورة')}</label>
+              <div className="space-y-2">
+                {supLines.map((l, idx) => (
+                  <div key={idx} className="border border-gray-200 rounded-xl p-2.5 space-y-2 bg-gray-50/50">
+                    <div className="flex gap-2 items-center">
+                      <input
+                        required
+                        value={l.itemName}
+                        onChange={(e) => updateSupLine(idx, 'itemName', e.target.value)}
+                        placeholder={t('اسم الصنف')}
+                        className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm"
+                      />
+                      {supLines.length > 1 && (
+                        <button type="button" onClick={() => removeSupLine(idx)} className="text-rose-500 hover:text-rose-700 text-lg font-bold px-1">×</button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-gray-500 mb-0.5">{t('العدد')}</label>
+                        <input required type="number" min={0} step="any" value={l.count} onChange={(e) => updateSupLine(idx, 'count', e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-500 mb-0.5">{t('الوحدة')}</label>
+                        <input value={l.unit} onChange={(e) => updateSupLine(idx, 'unit', e.target.value)} placeholder={t('قطعة')} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-500 mb-0.5">{t('السعر')}</label>
+                        <input required type="number" min={0} step="any" value={l.unitPrice} onChange={(e) => updateSupLine(idx, 'unitPrice', e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+                      </div>
+                    </div>
+                    {Number(l.count) > 0 && Number(l.unitPrice) > 0 && (
+                      <div className="text-[11px] text-gray-600 text-left">
+                        {t('الإجمالي')}: <span className="font-bold">{(Number(l.count) * Number(l.unitPrice)).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div>
-                <label className="block text-xs font-bold mb-1 text-gray-600">{t('السعر')}</label>
-                <input required type="number" min={0} step="any" value={supForm.unitPrice} onChange={(e) => setSupForm({ ...supForm, unitPrice: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-              </div>
+              <button type="button" onClick={addSupLine} className="text-blue-600 text-xs font-bold mt-2">+ {t('إضافة صنف')}</button>
             </div>
 
-            {Number(supForm.count) > 0 && Number(supForm.unitPrice) > 0 && (
-              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm">
-                <span className="text-gray-600">{t('الإجمالي')}: </span>
-                <span className="font-extrabold">{(Number(supForm.count) * Number(supForm.unitPrice)).toLocaleString()}</span>
+            {supLinesTotal > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-sm">
+                <span className="text-gray-700 font-bold">{t('إجمالي الفاتورة')}: </span>
+                <span className="font-extrabold text-blue-800 text-base">{supLinesTotal.toLocaleString()}</span>
               </div>
             )}
+
+            {/* ============ صورة الفاتورة ============ */}
+            <div>
+              <label className="block text-xs font-bold mb-1.5 text-gray-600">{t('صورة الفاتورة (اختياري)')}</label>
+              <div className="flex items-center gap-3">
+                {supForm.imageUrl && <img src={getAssetUrl(supForm.imageUrl)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />}
+                <label className="border border-gray-200 hover:border-gray-300 text-xs font-bold px-3 py-2 rounded-lg transition cursor-pointer">
+                  {uploadingInvoice ? t('جاري الرفع...') : supForm.imageUrl ? t('تغيير الصورة') : t('رفع صورة')}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleInvoiceUpload} disabled={uploadingInvoice} className="hidden" />
+                </label>
+                {supForm.imageUrl && (
+                  <button type="button" onClick={() => setSupForm({ ...supForm, imageUrl: '' })} className="text-rose-500 hover:text-rose-700 text-xs font-bold px-2 py-2 transition">
+                    {t('حذف الصورة')}
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div>
               <label className="block text-xs font-bold mb-1 text-gray-600">

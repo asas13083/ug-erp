@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import PageHeader from '../components/PageHeader';
 import { downloadFile } from '../utils/downloadFile';
+import { getAssetUrl } from '../utils/assetUrl';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -152,13 +153,27 @@ export default function SupplierDetailPage() {
               </thead>
               <tbody>
                 {entries.map((e) => (
-                  <tr key={e.id} className="border-t border-gray-50">
-                    <td className="px-4 py-2.5 text-xs text-gray-600">{new Date(e.date).toLocaleDateString(locale)}</td>
+                  <tr key={e.id} className="border-t border-gray-50 align-top">
+                    <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{new Date(e.date).toLocaleDateString(locale)}</td>
                     <td className="px-4 py-2.5">{e.event?.name || '—'}</td>
-                    <td className="px-4 py-2.5">{e.description}</td>
-                    <td className="px-4 py-2.5 font-bold">{e.total.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-emerald-600">{e.paidAmount.toLocaleString()}</td>
-                    <td className={`px-4 py-2.5 font-bold ${e.total - e.paidAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    <td className="px-4 py-2.5">
+                      <div>{e.description}</div>
+                      <div className="mt-1 space-y-0.5">
+                        {(e.lines || []).map((l) => (
+                          <div key={l.id} className="text-[11px] text-gray-500">
+                            {l.itemName} — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}
+                          </div>
+                        ))}
+                      </div>
+                      {e.imageUrl && (
+                        <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
+                          <img src={getAssetUrl(e.imageUrl)} alt="" className="w-9 h-9 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
+                        </a>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-emerald-600 whitespace-nowrap">{e.paidAmount.toLocaleString()}</td>
+                    <td className={`px-4 py-2.5 font-bold whitespace-nowrap ${e.total - e.paidAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                       {(e.total - e.paidAmount).toLocaleString()}
                     </td>
                   </tr>

@@ -13,6 +13,7 @@ const NAV_GROUPS = [
       { to: '/items', label: 'الأصناف', module: 'items' },
       { to: '/warehouses', label: 'المخازن', module: 'warehouses' },
       { to: '/categories', label: 'التصنيفات', module: 'categories' },
+      { to: '/supplier-deliveries', label: 'واردات الموردين', module: 'items' },
       { to: '/stock-transfer', label: 'النقل بين المخازن', module: 'warehouses', action: 'edit' },
       { to: '/stock-count', label: 'الجرد الدوري', module: 'warehouses', action: 'edit' },
     ],
