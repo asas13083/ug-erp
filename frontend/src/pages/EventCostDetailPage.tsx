@@ -200,7 +200,7 @@ export default function EventCostDetailPage() {
       setShowSupplierForm(false);
       setEditingSupplierEntry(null);
       loadSupplierEntries();
-      load();
+      loadAll();
     } catch (err) {
       setError(err.response?.data?.message || t('حصل خطأ'));
     }
@@ -211,7 +211,7 @@ export default function EventCostDetailPage() {
     try {
       await api.delete(`/event-costs/suppliers/${entry.id}`);
       loadSupplierEntries();
-      load();
+      loadAll();
     } catch (err) {
       setError(err.response?.data?.message || t('حصل خطأ'));
     }
