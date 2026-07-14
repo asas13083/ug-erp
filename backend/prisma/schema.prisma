@@ -286,6 +286,7 @@ model Event {
   costItems      EventCostItem[]
   costEntries    EventCostRecordEntry[]
   supplierEntries EventSupplierEntry[]
+  supplierPayments SupplierPayment[]
 
   @@index([clientId])
   @@index([startDate, endDate])
