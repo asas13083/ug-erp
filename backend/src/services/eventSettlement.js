@@ -137,15 +137,15 @@ module.exports = { computeBulkSettlementStatuses, buildEventItemSummary };
  * فعلاً رجع لمنظومة المخازن، مش لازم يرجع لنفس المكان بالظبط.
  */
 async function computeWarehouseStillOut(warehouseId, itemIds) {
-  const result = new Map();
-  if (itemIds.length === 0) return result;
+  const rawResult = new Map(); // itemId -> { quantity, eventIds: Set }
+  if (itemIds.length === 0) return rawResult;
 
   // 1) اللي المخزن ده تحديداً صرفه، لكل صنف ولكل حفلة
   const issuedFromHere = await prisma.issueVoucherItem.findMany({
     where: { itemId: { in: itemIds }, voucher: { warehouseId, status: 'CONFIRMED' } },
     select: { itemId: true, quantity: true, voucher: { select: { eventId: true } } },
   });
-  if (issuedFromHere.length === 0) return result;
+  if (issuedFromHere.length === 0) return rawResult;
 
   // 2) نجيب كل حركة الصنف ده في النظام كله (مش بس الحفلات المعروفة الأول)
   // — لأن نقل العهدة ممكن يوصل الكمية لحفلات تانية بعيدة عن أي حفلة صرفنالها
@@ -205,28 +205,51 @@ async function computeWarehouseStillOut(warehouseId, itemIds) {
   }
 
   // بنتتبّع نصيب المخزن ده من كل كمية، عن طريق أي عدد نقلات عهدة، لحد ما
-  // نلاقي "رجوع فعلي لمخزن" أو "فاقد" — قبل كده تفضل "لسه برا" في المخزن الأصلي
-  function traceStillOut(itemId, eventId, incomingShare, depth = 0) {
-    if (incomingShare <= 0 || depth > 20) return 0; // حد أقصى للعمق يمنع أي لوب غير متوقع
+  // نلاقي "رجوع فعلي لمخزن" أو "فاقد" — قبل كده تفضل "لسه برا" في المخزن الأصلي.
+  // وكل مرة نوصل لحفلة "نهائية" (لسه برا فيها فعلاً، مش اتنقلت عهدة لمكان
+  // تاني) بنسجّلها في eventIdsSet عشان نقدر نعرف "برا في كام حفلة" لكل صنف
+  function traceStillOut(itemId, eventId, incomingShare, eventIdsSet, depth = 0) {
+    if (incomingShare <= 0 || depth > 20) return 0;
     const pending = incomingShare * pendingRatio(itemId, eventId);
     if (pending <= 0) return 0;
 
     const key = `${itemId}|${eventId}`;
     const outgoing = custodyOutByItemEvent.get(key) || [];
-    if (outgoing.length === 0) return pending; // مفيش نقل عهدة من هنا، لسه برا فعلاً في الحفلة دي
+    if (outgoing.length === 0) {
+      eventIdsSet.add(eventId);
+      return pending; // مفيش نقل عهدة من هنا، لسه برا فعلاً في الحفلة دي
+    }
 
     const totalOutgoingQty = outgoing.reduce((s, t) => s + t.quantity, 0) || 1;
     let stillOut = 0;
     outgoing.forEach((t) => {
       const forwardShare = pending * (t.quantity / totalOutgoingQty);
-      stillOut += traceStillOut(itemId, t.toEventId, forwardShare, depth + 1);
+      stillOut += traceStillOut(itemId, t.toEventId, forwardShare, eventIdsSet, depth + 1);
     });
     return stillOut;
   }
 
   issuedFromHere.forEach((l) => {
-    const traced = traceStillOut(l.itemId, l.voucher.eventId, l.quantity);
-    result.set(l.itemId, (result.get(l.itemId) || 0) + Math.round(traced));
+    if (!rawResult.has(l.itemId)) rawResult.set(l.itemId, { quantity: 0, eventIds: new Set() });
+    const entry = rawResult.get(l.itemId);
+    const traced = traceStillOut(l.itemId, l.voucher.eventId, l.quantity, entry.eventIds);
+    entry.quantity += Math.round(traced);
+  });
+
+  // نجيب أسماء كل الحفلات دي مرة واحدة (بدل ما كل صنف يطلب اسمها لوحده)
+  const allEventIds = [...new Set(Array.from(rawResult.values()).flatMap((v) => [...v.eventIds]))];
+  const eventsInfo = allEventIds.length
+    ? await prisma.event.findMany({ where: { id: { in: allEventIds } }, select: { id: true, name: true, number: true } })
+    : [];
+  const eventMap = new Map(eventsInfo.map((e) => [e.id, e]));
+
+  const result = new Map();
+  rawResult.forEach((v, itemId) => {
+    result.set(itemId, {
+      quantity: v.quantity,
+      eventsCount: v.eventIds.size,
+      events: [...v.eventIds].map((id) => eventMap.get(id)).filter(Boolean),
+    });
   });
 
   return result;

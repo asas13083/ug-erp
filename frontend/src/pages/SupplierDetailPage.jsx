@@ -116,7 +116,7 @@ export default function SupplierDetailPage() {
                 {events.map((row) => (
                   <tr key={row.event.id} className="border-t border-gray-50">
                     <td className="px-4 py-2.5 font-bold">
-                      <Link to={`/event-costs/${row.event.id}`} className="text-blue-600 hover:underline">{row.event.name}</Link>
+                      <Link to={`/accounts/${row.event.id}`} className="text-blue-600 hover:underline">{row.event.name}</Link>
                       <span className="text-[10px] text-gray-500 font-normal"> · {row.event.number}</span>
                     </td>
                     <td className="px-4 py-2.5">{row.count}</td>
@@ -216,7 +216,7 @@ export default function SupplierDetailPage() {
                     <td className="px-4 py-2.5 font-extrabold text-emerald-600">{p.amount.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-xs">
                       {p.event ? (
-                        <Link to={`/event-costs/${p.event.id}`} className="text-blue-600 hover:underline">{p.event.name}</Link>
+                        <Link to={`/accounts/${p.event.id}`} className="text-blue-600 hover:underline">{p.event.name}</Link>
                       ) : (
                         <span className="text-gray-400">{t('عامة')}</span>
                       )}

@@ -147,6 +147,7 @@ export default function EventsPage() {
             <thead>
               <tr className="bg-gray-50 text-gray-600 text-xs">
                 <th className="text-right px-4 py-3 font-bold">{t('الرقم')}</th>
+                <th className="text-right px-4 py-3 font-bold">{t('الصورة')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('اسم الحفلة')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('العميل')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('التاريخ')}</th>
@@ -160,6 +161,13 @@ export default function EventsPage() {
                 return (
                   <tr key={ev.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition">
                     <td className="px-4 py-3 font-mono text-xs text-gray-600">{ev.number}</td>
+                    <td className="px-4 py-3">
+                      {ev.logoUrl ? (
+                        <img src={getAssetUrl(ev.logoUrl)} alt="" className="w-9 h-9 rounded-lg object-contain border border-gray-200 bg-white" onError={(e) => (e.target.style.display = 'none')} />
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-bold">
                       <Link to={`/events/${ev.id}`} className="flex items-center gap-2 hover:text-blue-600 transition">
                         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${SETTLEMENT_DOT[ev.settlementStatus]?.[0] || 'bg-gray-300'}`} title={t(SETTLEMENT_DOT[ev.settlementStatus]?.[1] || '')}></span>
@@ -180,7 +188,7 @@ export default function EventsPage() {
                   </tr>
                 );
               })}
-              {events.length === 0 && <tr><td colSpan={6} className="text-center py-10 text-gray-600">{t('لا توجد حفلات')}</td></tr>}
+              {events.length === 0 && <tr><td colSpan={7} className="text-center py-10 text-gray-600">{t('لا توجد حفلات')}</td></tr>}
             </tbody>
           </table>
           <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPageChange={setPage} />

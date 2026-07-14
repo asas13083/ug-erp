@@ -88,10 +88,10 @@ export default function WarehouseDetailPage() {
   }
 
   function handlePdf() {
-    const rows = stock.map((s) => `<tr><td>${esc(s.item.code)}</td><td>${esc(s.item.name)}</td><td>${esc(s.item.category?.name)}</td><td>${s.quantity}</td><td>${s.reservedQty}</td><td>${s.quantity - s.reservedQty}</td><td>${s.stillOut || 0}</td><td>${s.lost || 0}</td><td>${(s.quantity - s.reservedQty) + (s.stillOut || 0) + (s.lost || 0)}</td></tr>`).join('');
+    const rows = stock.map((s) => `<tr><td>${esc(s.item.code)}</td><td>${esc(s.item.name)}</td><td>${esc(s.item.category?.name)}</td><td>${s.quantity}</td><td>${s.reservedQty}</td><td>${s.quantity - s.reservedQty}</td><td>${s.stillOut || 0}</td><td>${s.stillOutEventsCount || 0}</td><td>${s.lost || 0}</td><td>${(s.quantity - s.reservedQty) + (s.stillOut || 0) + (s.lost || 0)}</td></tr>`).join('');
     downloadPdf(
       `رصيد مخزن ${esc(warehouse?.name || '')}`,
-      `<table><thead><tr><th>الكود</th><th>الصنف</th><th>التصنيف</th><th>الكمية</th><th>محجوز</th><th>المتاح</th><th>لسه برا</th><th>الفاقد</th><th>إجمالي كمية الصنف</th></tr></thead><tbody>${rows}</tbody></table>`,
+      `<table><thead><tr><th>الكود</th><th>الصنف</th><th>التصنيف</th><th>الكمية</th><th>محجوز</th><th>المتاح</th><th>لسه برا</th><th>برا في كام حفلة</th><th>الفاقد</th><th>إجمالي كمية الصنف</th></tr></thead><tbody>${rows}</tbody></table>`,
       { filename: `مخزن-${warehouse?.name || 'تقرير'}.pdf` }
     );
   }
@@ -165,6 +165,7 @@ export default function WarehouseDetailPage() {
                   <th className="text-right px-4 py-3 font-bold">{t('محجوز')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('المتاح')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('لسه برا')}</th>
+                  <th className="text-right px-4 py-3 font-bold">{t('برا في كام حفلة')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('الفاقد')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('إجمالي كمية الصنف')}</th>
                   <th className="text-right px-4 py-3 font-bold w-24">{t('إجراءات')}</th>
@@ -209,6 +210,18 @@ export default function WarehouseDetailPage() {
                     <td className="px-4 py-3">{s.reservedQty}</td>
                     <td className="px-4 py-3">{s.quantity - s.reservedQty}</td>
                     <td className="px-4 py-3 font-bold text-amber-600">{s.stillOut || 0}</td>
+                    <td className="px-4 py-3">
+                      {s.stillOutEventsCount > 0 ? (
+                        <span
+                          className="text-xs font-bold px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 cursor-default"
+                          title={(s.stillOutEvents || []).map((e) => `${e.name} (${e.number})`).join('، ')}
+                        >
+                          {s.stillOutEventsCount} {t('حفلة')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-bold text-rose-600">{s.lost || 0}</td>
                     <td className="px-4 py-3 font-extrabold text-gray-800">{(s.quantity - s.reservedQty) + (s.stillOut || 0) + (s.lost || 0)}</td>
                     <td className="px-4 py-3">
@@ -216,7 +229,7 @@ export default function WarehouseDetailPage() {
                     </td>
                   </tr>
                 ))}
-                {stock.length === 0 && <tr><td colSpan={11} className="text-center py-10 text-gray-600">{t('لا يوجد رصيد في هذا المخزن')}</td></tr>}
+                {stock.length === 0 && <tr><td colSpan={12} className="text-center py-10 text-gray-600">{t('لا يوجد رصيد في هذا المخزن')}</td></tr>}
               </tbody>
             </table>
           </div>

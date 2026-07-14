@@ -33,7 +33,16 @@ router.get(
     const lostMap = new Map();
     lossLines.forEach((l) => lostMap.set(l.itemId, (lostMap.get(l.itemId) || 0) + l.quantity));
 
-    const stockWithOut = stock.map((s) => ({ ...s, stillOut: Math.max(stillOutMap.get(s.itemId) || 0, 0), lost: lostMap.get(s.itemId) || 0 }));
+    const stockWithOut = stock.map((s) => {
+      const info = stillOutMap.get(s.itemId);
+      return {
+        ...s,
+        stillOut: info?.quantity || 0,
+        stillOutEventsCount: info?.eventsCount || 0,
+        stillOutEvents: info?.events || [],
+        lost: lostMap.get(s.itemId) || 0,
+      };
+    });
     res.json({ success: true, data: stockWithOut });
   })
 );
