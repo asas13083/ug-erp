@@ -7,6 +7,8 @@ const CATEGORY_LABELS = {
   items: 'أصناف',
   events: 'حفلات',
   clients: 'عملاء',
+  suppliers: 'موردين',
+  warehouses: 'مخازن',
   issueVouchers: 'أذون صرف',
   returnVouchers: 'أذون مرتجع',
 };

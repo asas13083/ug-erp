@@ -260,7 +260,7 @@ model Event {
   location      String?
   startDate     DateTime
   endDate       DateTime
-  status        EventStatus @default(PLANNED)
+  status        EventStatus @default(ONGOING)
   responsibleId String?
   notes         String?
   logoUrl       String? // لوجو خاص بالحفلة — بيظهر جنب لوجو الشركة في المستندات

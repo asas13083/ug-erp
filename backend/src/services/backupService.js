@@ -83,13 +83,46 @@ function listBackups() {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-/** تشغيل نسخة احتياطية تلقائية كل 24 ساعة */
+/**
+ * نسخة احتياطية تلقائية في معاد ثابت — الساعة 12 بالظبط (منتصف الليل و12 الظهر)
+ * بتوقيت القاهرة. مش "كل 12 ساعة من وقت ما السيرفر اشتغل" (اللي كان بيخلي
+ * المعاد يتغيّر مع كل إعادة تشغيل)، لأ — معاد ثابت مضمون كل يوم.
+ */
 function startBackupScheduler() {
-  const intervalMs = Number(process.env.BACKUP_INTERVAL_MS) || 24 * 60 * 60 * 1000;
-  setInterval(() => {
-    runBackup().catch((err) => console.error('خطأ في النسخة الاحتياطية التلقائية:', err.message));
-  }, intervalMs);
-  console.log(`✓ النسخ الاحتياطي التلقائي مجدول كل ${intervalMs / 3600000} ساعة`);
+  const logger = require('../utils/logger');
+
+  function msUntilNextRun() {
+    // بنحسب الوقت بتوقيت القاهرة تحديداً (مش توقيت السيرفر اللي ممكن يكون UTC)
+    const nowCairo = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+    const next = new Date(nowCairo);
+    const hour = nowCairo.getHours();
+
+    if (hour < 12) {
+      next.setHours(12, 0, 0, 0); // الساعة 12 الظهر النهاردة
+    } else {
+      next.setDate(next.getDate() + 1);
+      next.setHours(0, 0, 0, 0); // 12 بالليل (بداية بكرة)
+    }
+    return next.getTime() - nowCairo.getTime();
+  }
+
+  function scheduleNext() {
+    const delay = msUntilNextRun();
+    const hours = (delay / 3600000).toFixed(1);
+    logger.info(`✓ النسخة الاحتياطية التلقائية الجاية بعد ${hours} ساعة (الساعة 12 بتوقيت القاهرة)`);
+
+    setTimeout(async () => {
+      try {
+        await runBackup();
+        logger.info('✓ النسخة الاحتياطية التلقائية تمت بنجاح');
+      } catch (err) {
+        logger.error('خطأ في النسخة الاحتياطية التلقائية: ' + err.message, { stack: err.stack });
+      }
+      scheduleNext(); // نجدول اللي بعدها مهما حصل (حتى لو دي فشلت)
+    }, delay);
+  }
+
+  scheduleNext();
 }
 
 /**

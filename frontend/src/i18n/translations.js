@@ -1017,6 +1017,8 @@ Object.assign(translations, {
   'هيفضل معلّق': { en: 'Stays pending' },
   'حذف الصورة': { en: 'Remove Image' },
   'لوجو الحفلة (اختياري)': { en: 'Event Logo (optional)' },
+  'موردين': { en: 'Suppliers' },
+  'مخازن': { en: 'Warehouses' },
 });
 
 export default translations;

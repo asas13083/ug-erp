@@ -89,7 +89,7 @@ export default function NotificationBell() {
         <>
           {/* طبقة شفافة تقفل النافذة لو دست في أي مكان تاني */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 mt-2 w-96 max-w-[calc(100vw-1.5rem)] max-h-[70vh] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-modalpop flex flex-col">
+          <div className="absolute left-0 mt-2 w-96 max-w-[calc(100vw-1.5rem)] max-h-[min(70vh,calc(100vh-9rem))] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-modalpop flex flex-col">
             <div className="px-4 py-3 border-b border-gray-100 font-extrabold text-sm flex-shrink-0">{t('آخر التحديثات')}</div>
             <div className="overflow-y-auto">
               {logs.map((l) => {
