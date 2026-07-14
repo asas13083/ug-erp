@@ -82,6 +82,8 @@ model User {
   returnVouchersReceivedBy ReturnVoucher[] @relation("ReturnVoucherReceivedBy")
   eventCostItems   EventCostItem[]
   eventCostEntries EventCostRecordEntry[]
+  eventSupplierEntries EventSupplierEntry[]
+  supplierPayments     SupplierPayment[]
   stockTransfers StockTransfer[]
 
   @@map("users")
@@ -203,6 +205,8 @@ model Supplier {
   createdAt DateTime @default(now())
 
   items SupplierItem[]
+  eventEntries EventSupplierEntry[]
+  payments     SupplierPayment[]
 
   @@map("suppliers")
 }
@@ -281,6 +285,7 @@ model Event {
   assignments EventAssignment[]
   costItems      EventCostItem[]
   costEntries    EventCostRecordEntry[]
+  supplierEntries EventSupplierEntry[]
 
   @@index([clientId])
   @@index([startDate, endDate])
@@ -780,4 +785,50 @@ model EventCostRecordEntry {
   @@index([purposeId])
   @@index([sourceType, sourceId])
   @@map("event_cost_record_entries")
+}
+
+// ============ الموردين على الحفلات ============
+
+// فاتورة مورد على حفلة معيّنة — زي حركة النقل بالظبط، بس مرتبطة بمورد،
+// وبتتتبّع كمان المدفوع من إجمالي الفاتورة (عشان نعرف الآجل المستحق)
+model EventSupplierEntry {
+  id          String   @id @default(cuid())
+  eventId     String
+  supplierId  String
+  date        DateTime
+  description String   // الوصف: تصوير، إيجار كراسي، فرقة موسيقية...
+  count       Int      @default(1)
+  unitPrice   Float
+  total       Float    // count × unitPrice — محسوبة ومخزّنة وقت الحفظ
+  paidAmount  Float    @default(0) // كام اتدفع فعلاً من الفاتورة دي (0 = آجل بالكامل)
+  notes       String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([eventId])
+  @@index([supplierId])
+  @@map("event_supplier_entries")
+}
+
+// دفعة لاحقة لمورد — مش مرتبطة بفاتورة واحدة بعينها، دي دفعة عامة على
+// حسابه كله (زي ما بيحصل فعلياً: بتدفعله مبلغ يخصم من إجمالي المستحق)
+model SupplierPayment {
+  id         String   @id @default(cuid())
+  supplierId String
+  amount     Float
+  date       DateTime
+  notes      String?
+  userId     String
+  createdAt  DateTime @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([supplierId])
+  @@map("supplier_payments")
 }

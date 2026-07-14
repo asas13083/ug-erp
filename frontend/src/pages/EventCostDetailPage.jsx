@@ -7,11 +7,13 @@ import { downloadPdf } from '../utils/printDocument';
 import { esc } from '../utils/escapeHtml';
 import { getAssetUrl } from '../utils/assetUrl';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 const CATEGORY_LABELS_AR = { DECOR_LABOR: 'عمالة الديكور', UNIFORMS: 'البدلات', TRANSPORT: 'النقل', MICROBUS: 'الميكروباص' };
 
 export default function EventCostDetailPage() {
   const { t, lang } = useLanguage();
+  const { can } = useAuth();
   const { eventId } = useParams();
   const locale = lang === 'ar' ? 'ar-EG' : 'en-GB';
 
@@ -29,6 +31,15 @@ export default function EventCostDetailPage() {
   const [itemNotes, setItemNotes] = useState('');
 
   const [expandedCategory, setExpandedCategory] = useState(null);
+
+  // ============ الموردين ============
+  const [showSuppliers, setShowSuppliers] = useState(false);
+  const [supplierEntries, setSupplierEntries] = useState({ entries: [], total: 0, paid: 0, due: 0 });
+  const [suppliersList, setSuppliersList] = useState([]);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [editingSupplierEntry, setEditingSupplierEntry] = useState(null);
+  const [supForm, setSupForm] = useState({ supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', count: 1, unitPrice: '', paidAmount: 0, notes: '' });
+
   const [categoryEntries, setCategoryEntries] = useState({ entries: [], total: 0 });
   const [categoryPurposeFilter, setCategoryPurposeFilter] = useState('');
   const [transportSuggestions, setTransportSuggestions] = useState([]);
@@ -95,6 +106,74 @@ export default function EventCostDetailPage() {
     return Array.from(map.entries())
       .map(([date, list]) => ({ date, list, total: list.reduce((s, x) => s + x.total, 0) }))
       .sort((a, b) => (a.date < b.date ? 1 : -1)); // الأحدث فوق
+  }
+
+  // ============ دوال الموردين ============
+  function loadSupplierEntries() {
+    api.get(`/event-costs/${eventId}/suppliers`).then(({ data }) => setSupplierEntries(data.data)).catch(() => {});
+  }
+
+  useEffect(() => {
+    if (showSuppliers) {
+      loadSupplierEntries();
+      api.get('/suppliers').then(({ data }) => setSuppliersList(data.data.data || data.data)).catch(() => {});
+    }
+  }, [showSuppliers, eventId]);
+
+  function openSupplierForm(entry = null) {
+    setEditingSupplierEntry(entry);
+    setSupForm(
+      entry
+        ? {
+            supplierId: entry.supplierId,
+            date: entry.date.slice(0, 10),
+            description: entry.description,
+            count: entry.count,
+            unitPrice: entry.unitPrice,
+            paidAmount: entry.paidAmount,
+            notes: entry.notes || '',
+          }
+        : { supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', count: 1, unitPrice: '', paidAmount: 0, notes: '' }
+    );
+    setShowSupplierForm(true);
+  }
+
+  async function saveSupplierEntry(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      const payload = {
+        supplierId: supForm.supplierId,
+        date: supForm.date,
+        description: supForm.description,
+        count: Number(supForm.count) || 1,
+        unitPrice: Number(supForm.unitPrice),
+        paidAmount: Number(supForm.paidAmount) || 0,
+        notes: supForm.notes || undefined,
+      };
+      if (editingSupplierEntry) {
+        await api.put(`/event-costs/suppliers/${editingSupplierEntry.id}`, payload);
+      } else {
+        await api.post(`/event-costs/${eventId}/suppliers`, payload);
+      }
+      setShowSupplierForm(false);
+      setEditingSupplierEntry(null);
+      loadSupplierEntries();
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || t('حصل خطأ'));
+    }
+  }
+
+  async function deleteSupplierEntry(entry) {
+    if (!confirm(t('متأكد من حذف الفاتورة دي؟'))) return;
+    try {
+      await api.delete(`/event-costs/suppliers/${entry.id}`);
+      loadSupplierEntries();
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || t('حصل خطأ'));
+    }
   }
 
   function openCategory(category) {
@@ -246,6 +325,7 @@ export default function EventCostDetailPage() {
   function exportPdf() {
     if (!summary || !event) return;
     const categoryRows = summary.categoryTotals.map((c) => `<tr><td><b>${esc(t(c.label))}</b></td><td><b>${c.total.toLocaleString()}</b></td><td>—</td></tr>`).join('');
+    const suppliersRow = `<tr><td><b>الموردين</b></td><td><b>${(summary.suppliersTotal || 0).toLocaleString()}</b></td><td>${summary.suppliersDue > 0 ? `مستحق: ${summary.suppliersDue.toLocaleString()}` : 'مدفوع بالكامل'}</td></tr>`;
     const itemRows = summary.costItems.map((i) => `<tr><td>${esc(i.label)}</td><td>${i.amount.toLocaleString()}</td><td>${esc(i.notes || '—')}</td></tr>`).join('');
     downloadPdf(
       `كشف حسابات — ${event.name}`,
@@ -257,7 +337,7 @@ export default function EventCostDetailPage() {
         <div><b>تاريخ الحفلة:</b> ${new Date(event.startDate).toLocaleDateString('ar-EG')}</div>
         <div><b>تاريخ الكشف:</b> ${new Date().toLocaleString('ar-EG')}</div>
       </div>
-      <table><thead><tr><th>البند</th><th>المبلغ</th><th>ملاحظات</th></tr></thead><tbody>${categoryRows}${itemRows}
+      <table><thead><tr><th>البند</th><th>المبلغ</th><th>ملاحظات</th></tr></thead><tbody>${categoryRows}${suppliersRow}${itemRows}
         <tr style="font-weight:bold; background:#f3f4f6;"><td>الإجمالي الكلي</td><td>${summary.grandTotal.toLocaleString()}</td><td></td></tr>
       </tbody></table>`,
       {
@@ -372,6 +452,25 @@ export default function EventCostDetailPage() {
                   </td>
                 </tr>
               ))}
+              {/* صف الموردين — تصنيف مستقل بيتحسب في الإجمالي زي باقي التصنيفات */}
+              <tr className="border-t border-gray-100 bg-amber-50/40">
+                <td className="px-4 py-3 font-bold text-amber-800">
+                  {t('الموردين')} <span className="text-[10px] text-gray-500 font-normal">({t('سجل متراكم')})</span>
+                </td>
+                <td className="px-4 py-3 font-extrabold text-amber-800">{(summary.suppliersTotal || 0).toLocaleString()}</td>
+                <td className="px-4 py-3 text-xs">
+                  {summary.suppliersDue > 0 ? (
+                    <span className="text-rose-600 font-bold">{t('مستحق')}: {summary.suppliersDue.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-emerald-600 font-bold">{t('مدفوع بالكامل')} ✓</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <button onClick={() => setShowSuppliers((v) => !v)} className="text-blue-600 text-xs font-bold hover:underline">
+                    {showSuppliers ? t('إخفاء التفاصيل') : t('عرض التفاصيل اليومية')}
+                  </button>
+                </td>
+              </tr>
               {summary.costItems.map((item) => (
                 <tr key={item.id} className="border-t border-gray-100">
                   <td className="px-4 py-3 font-bold">{item.label}</td>
@@ -395,6 +494,91 @@ export default function EventCostDetailPage() {
             </tfoot>
           </table>
         </div>
+
+        {/* ============ تفاصيل الموردين ============ */}
+        {showSuppliers && (
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-6">
+            <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-extrabold">{t('الموردين')} — {t('التفاصيل')}</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadFile(`/event-costs/${eventId}/suppliers/export-excel`, `موردين-${event.number}.xlsx`)}
+                  className="border border-gray-200 hover:border-gray-300 text-xs font-bold px-3 py-2 rounded-lg transition"
+                >
+                  Excel
+                </button>
+                {can('accounts', 'create') && (
+                  <button onClick={() => openSupplierForm()} className="text-blue-600 text-xs font-bold hover:underline">
+                    + {t('إضافة فاتورة مورد')}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 text-[11px]">
+                    <th className="text-right px-3 py-2 font-bold">{t('المورد')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('التاريخ')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('الوصف')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('العدد')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('السعر')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('الإجمالي')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('المدفوع')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('المتبقي')}</th>
+                    <th className="text-right px-3 py-2 font-bold w-24">{t('إجراءات')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplierEntries.entries.map((e) => {
+                    const due = e.total - e.paidAmount;
+                    return (
+                      <tr key={e.id} className="border-t border-gray-50">
+                        <td className="px-3 py-2 font-bold">
+                          <Link to={`/suppliers/${e.supplierId}`} className="text-blue-600 hover:underline">{e.supplier.name}</Link>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-600">{new Date(e.date).toLocaleDateString(locale)}</td>
+                        <td className="px-3 py-2">{e.description}</td>
+                        <td className="px-3 py-2">{e.count}</td>
+                        <td className="px-3 py-2">{e.unitPrice.toLocaleString()}</td>
+                        <td className="px-3 py-2 font-bold">{e.total.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-emerald-600">{e.paidAmount.toLocaleString()}</td>
+                        <td className={`px-3 py-2 font-bold ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-2">
+                            {can('accounts', 'edit') && (
+                              <button onClick={() => openSupplierForm(e)} className="text-blue-600 text-xs font-bold hover:underline">{t('تعديل')}</button>
+                            )}
+                            {can('accounts', 'delete') && (
+                              <button onClick={() => deleteSupplierEntry(e)} className="text-rose-600 text-xs font-bold hover:underline">{t('حذف')}</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {supplierEntries.entries.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير موردين لسه')}</td>
+                    </tr>
+                  )}
+                </tbody>
+                {supplierEntries.entries.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-extrabold">
+                      <td colSpan={5} className="px-3 py-2.5">{t('الإجمالي')}</td>
+                      <td className="px-3 py-2.5">{supplierEntries.total.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-emerald-600">{supplierEntries.paid.toLocaleString()}</td>
+                      <td className={`px-3 py-2.5 ${supplierEntries.due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{supplierEntries.due.toLocaleString()}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        )}
 
         {expandedCategory && (
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-5">
@@ -617,6 +801,70 @@ export default function EventCostDetailPage() {
           </div>
         </div>
       )}
+      {/* ============ نافذة فاتورة المورد ============ */}
+      {showSupplierForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <form onSubmit={saveSupplierEntry} className="bg-white rounded-2xl p-6 w-full max-w-md space-y-3.5 shadow-xl max-h-[85vh] overflow-y-auto">
+            <h3 className="font-extrabold text-lg">{editingSupplierEntry ? t('تعديل فاتورة مورد') : t('فاتورة مورد جديدة')}</h3>
+
+            <div>
+              <label className="block text-xs font-bold mb-1 text-gray-600">{t('المورد')}</label>
+              <select required value={supForm.supplierId} onChange={(e) => setSupForm({ ...supForm, supplierId: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <option value="">{t('اختر المورد')}</option>
+                {suppliersList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.company ? ` — ${s.company}` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1 text-gray-600">{t('التاريخ')}</label>
+              <input required type="date" value={supForm.date} onChange={(e) => setSupForm({ ...supForm, date: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1 text-gray-600">{t('الوصف')}</label>
+              <input required value={supForm.description} onChange={(e) => setSupForm({ ...supForm, description: e.target.value })} placeholder={t('مثلاً: تصوير، إيجار كراسي')} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1 text-gray-600">{t('العدد')}</label>
+                <input required type="number" min={1} value={supForm.count} onChange={(e) => setSupForm({ ...supForm, count: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1 text-gray-600">{t('السعر')}</label>
+                <input required type="number" min={0} step="any" value={supForm.unitPrice} onChange={(e) => setSupForm({ ...supForm, unitPrice: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            {Number(supForm.count) > 0 && Number(supForm.unitPrice) > 0 && (
+              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                <span className="text-gray-600">{t('الإجمالي')}: </span>
+                <span className="font-extrabold">{(Number(supForm.count) * Number(supForm.unitPrice)).toLocaleString()}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold mb-1 text-gray-600">
+                {t('المدفوع')} <span className="font-normal text-gray-500">({t('سيبه صفر لو آجل بالكامل')})</span>
+              </label>
+              <input type="number" min={0} step="any" value={supForm.paidAmount} onChange={(e) => setSupForm({ ...supForm, paidAmount: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-1 text-gray-600">{t('ملاحظات')}</label>
+              <input value={supForm.notes} onChange={(e) => setSupForm({ ...supForm, notes: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition">{t('حفظ')}</button>
+              <button type="button" onClick={() => { setShowSupplierForm(false); setEditingSupplierEntry(null); }} className="flex-1 border border-gray-200 hover:border-gray-300 font-bold py-2.5 rounded-xl text-sm transition">{t('إلغاء')}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {importingSuggestion && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" >
           <form onClick={(e) => e.stopPropagation()} onSubmit={confirmImport} className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-3.5 shadow-xl">

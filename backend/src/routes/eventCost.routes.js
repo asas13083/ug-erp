@@ -34,4 +34,13 @@ router.delete('/entries/:id', requirePermission('accounts', 'delete'), ctrl.remo
 // ============ نسخ كشف من حفلة سابقة ============
 router.post('/:eventId/copy-from/:sourceEventId', requirePermission('accounts', 'create'), ctrl.copyFromEvent);
 
+// ============ الموردين على الحفلة ============
+const supplierCtrl = require('../controllers/supplier.controller');
+
+router.get('/:eventId/suppliers', requirePermission('accounts', 'view'), supplierCtrl.listEventEntries);
+router.get('/:eventId/suppliers/export-excel', requirePermission('accounts', 'view'), supplierCtrl.exportEventSuppliersExcel);
+router.post('/:eventId/suppliers', requirePermission('accounts', 'create'), supplierCtrl.createEventEntry);
+router.put('/suppliers/:id', requirePermission('accounts', 'edit'), supplierCtrl.updateEventEntry);
+router.delete('/suppliers/:id', requirePermission('accounts', 'delete'), supplierCtrl.deleteEventEntry);
+
 module.exports = router;

@@ -6,6 +6,10 @@ const { MODULE_KEYS } = require('../../src/utils/modules');
 
 /** بيمسح كل جداول العمليات (مش المستخدمين والأدوار) عشان كل اختبار يبدأ من نقطة نضيفة */
 async function cleanDatabase() {
+  await prisma.eventSupplierEntry.deleteMany();
+  await prisma.supplierPayment.deleteMany();
+  await prisma.supplierItem.deleteMany();
+  await prisma.supplier.deleteMany();
   await prisma.custodyTransferItem.deleteMany();
   await prisma.custodyTransfer.deleteMany();
   await prisma.returnVoucherItem.deleteMany();

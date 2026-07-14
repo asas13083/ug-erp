@@ -24,18 +24,25 @@ const getSummary = asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new AppError('الحفلة غير موجودة', 404);
 
-  const [costItems, entries] = await Promise.all([
+  const [costItems, entries, supplierEntries] = await Promise.all([
     prisma.eventCostItem.findMany({ where: { eventId }, orderBy: { createdAt: 'asc' }, include: { user: { select: { fullName: true } } } }),
     prisma.eventCostRecordEntry.findMany({ where: { eventId }, select: { category: true, total: true } }),
+    prisma.eventSupplierEntry.findMany({ where: { eventId }, select: { total: true, paidAmount: true } }),
   ]);
 
   const categoryTotals = {};
   Object.keys(CATEGORY_LABELS).forEach((cat) => { categoryTotals[cat] = 0; });
   entries.forEach((e) => { categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.total; });
 
+  // الموردين — تصنيف مستقل بره enum التصنيفات المتراكمة، بس بيتحسب في
+  // الإجمالي الكلي زيهم بالظبط. وبنحسب كمان المستحق (غير المدفوع) للحفلة دي
+  const suppliersTotal = supplierEntries.reduce((s, e) => s + e.total, 0);
+  const suppliersPaid = supplierEntries.reduce((s, e) => s + e.paidAmount, 0);
+  const suppliersDue = suppliersTotal - suppliersPaid;
+
   const itemsTotal = costItems.reduce((s, i) => s + i.amount, 0);
   const categoriesTotal = Object.values(categoryTotals).reduce((s, v) => s + v, 0);
-  const grandTotal = itemsTotal + categoriesTotal;
+  const grandTotal = itemsTotal + categoriesTotal + suppliersTotal;
 
   res.json({
     success: true,
@@ -44,6 +51,9 @@ const getSummary = asyncHandler(async (req, res) => {
       categoryTotals: Object.entries(categoryTotals).map(([key, total]) => ({ category: key, label: CATEGORY_LABELS[key], total })),
       itemsTotal,
       categoriesTotal,
+      suppliersTotal,
+      suppliersPaid,
+      suppliersDue,
       grandTotal,
       expectedBudget: event.expectedBudget,
       budgetDiff: event.expectedBudget != null ? event.expectedBudget - grandTotal : null,
@@ -392,9 +402,10 @@ const exportExcel = asyncHandler(async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: eventId }, include: { client: true } });
   if (!event) throw new AppError('الحفلة غير موجودة', 404);
 
-  const [costItems, entries] = await Promise.all([
+  const [costItems, entries, supplierEntries] = await Promise.all([
     prisma.eventCostItem.findMany({ where: { eventId }, orderBy: { createdAt: 'asc' } }),
     prisma.eventCostRecordEntry.findMany({ where: { eventId }, include: { purpose: true }, orderBy: [{ category: 'asc' }, { date: 'asc' }] }),
+    prisma.eventSupplierEntry.findMany({ where: { eventId }, include: { supplier: true }, orderBy: { date: 'asc' } }),
   ]);
 
   const rows = [];
@@ -412,6 +423,24 @@ const exportExcel = asyncHandler(async (req, res) => {
     rows.push([`إجمالي ${CATEGORY_LABELS[cat]}`, '', '', '', '', '', catTotal]);
   });
 
+  // ============ الموردين ============
+  if (supplierEntries.length > 0) {
+    supplierEntries.forEach((e) => {
+      rows.push([
+        'الموردين',
+        new Date(e.date).toLocaleDateString('ar-EG'),
+        `${e.supplier.name} — ${e.description}`,
+        e.paidAmount >= e.total ? 'مدفوع' : `مستحق: ${e.total - e.paidAmount}`,
+        e.count,
+        e.unitPrice,
+        e.total,
+      ]);
+    });
+    const supTotal = supplierEntries.reduce((s, e) => s + e.total, 0);
+    highlightRows.push(rows.length);
+    rows.push(['إجمالي الموردين', '', '', '', '', '', supTotal]);
+  }
+
   // ============ بنود التوتال بعد كده ============
   costItems.forEach((i) => {
     rows.push([i.label, '', '', '', '', '', i.amount]);
@@ -421,7 +450,8 @@ const exportExcel = asyncHandler(async (req, res) => {
   rows.push(['إجمالي بنود التوتال', '', '', '', '', '', itemsTotal]);
 
   const categoriesTotal = entries.reduce((s, e) => s + e.total, 0);
-  const grandTotal = itemsTotal + categoriesTotal;
+  const suppliersTotal = supplierEntries.reduce((s, e) => s + e.total, 0);
+  const grandTotal = itemsTotal + categoriesTotal + suppliersTotal;
   highlightRows.push(rows.length);
   rows.push(['الإجمالي الكلي', '', '', '', '', '', grandTotal]);
 

@@ -57,6 +57,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/accounts', label: 'كشوفات تكاليف الحفلات', module: 'accounts' },
       { to: '/accounts/comparison', label: 'تقرير مقارنة الحفلات', module: 'accounts' },
+      { to: '/suppliers', label: 'الموردين', module: 'suppliers' },
       { to: '/event-purposes', label: 'الأغراض', module: 'accounts', action: 'edit' },
       { to: '/event-cost-item-templates', label: 'أسماء بنود التوتال الشائعة', module: 'accounts', action: 'edit' },
     ],
