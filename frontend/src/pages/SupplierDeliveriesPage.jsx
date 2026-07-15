@@ -4,7 +4,7 @@ import api from '../api/client';
 import PageHeader from '../components/PageHeader';
 import { getAssetUrl } from '../utils/assetUrl';
 import { downloadPdf } from '../utils/printDocument';
-import { escapeHtml as esc } from '../utils/escapeHtml';
+import { esc } from '../utils/escapeHtml';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
