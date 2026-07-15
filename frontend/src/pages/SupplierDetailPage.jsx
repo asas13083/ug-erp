@@ -18,7 +18,9 @@ export default function SupplierDetailPage() {
   const [error, setError] = useState('');
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '', eventId: '' });
+  const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+  // توزيع الدفعة على فواتير: { entryId: مبلغ مخصّص }
+  const [alloc, setAlloc] = useState({});
 
   function load() {
     setLoading(true);
@@ -29,18 +31,45 @@ export default function SupplierDetailPage() {
   }
   useEffect(load, [id]);
 
+  function openPaymentForm() {
+    setPayForm({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+    setAlloc({});
+    setError('');
+    setShowPaymentForm(true);
+  }
+
+  function setAllocFor(entryId, value) {
+    setAlloc((prev) => {
+      const next = { ...prev };
+      if (value === '' || Number(value) <= 0) delete next[entryId];
+      else next[entryId] = value;
+      return next;
+    });
+  }
+
+  const allocatedSum = Object.values(alloc).reduce((s, v) => s + (Number(v) || 0), 0);
+  const payAmountNum = Number(payForm.amount) || 0;
+  const unallocated = payAmountNum - allocatedSum;
+
   async function savePayment(e) {
     e.preventDefault();
     setError('');
+    if (allocatedSum > payAmountNum + 0.001) {
+      setError(t('مجموع الموزّع على الفواتير أكبر من قيمة الدفعة'));
+      return;
+    }
     try {
+      const allocations = Object.entries(alloc)
+        .map(([entryId, amount]) => ({ entryId, amount: Number(amount) }))
+        .filter((a) => a.amount > 0);
       await api.post(`/suppliers/${id}/payments`, {
-        amount: Number(payForm.amount),
+        amount: payAmountNum,
         date: payForm.date,
         notes: payForm.notes || undefined,
-        eventId: payForm.eventId || undefined,
+        allocations: allocations.length ? allocations : undefined,
       });
       setShowPaymentForm(false);
-      setPayForm({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '', eventId: '' });
+      setAlloc({});
       load();
     } catch (err) {
       setError(err.response?.data?.message || t('حصل خطأ'));
@@ -60,7 +89,7 @@ export default function SupplierDetailPage() {
   if (loading) return <div className="p-7 text-center text-gray-600 text-sm">{t('جاري التحميل...')}</div>;
   if (!data) return <div className="p-7 text-center text-rose-600 text-sm">{error || t('المورد غير موجود')}</div>;
 
-  const { supplier, entries, payments, events, totalInvoiced, totalPaid, due } = data;
+  const { supplier, entries, payments, events, openInvoices = [], totalInvoiced, totalPaid, due } = data;
 
   return (
     <>
@@ -90,9 +119,13 @@ export default function SupplierDetailPage() {
             <div className="text-xs text-gray-500 font-bold mb-1">{t('المدفوع')}</div>
             <div className="text-2xl font-extrabold text-emerald-600">{totalPaid.toLocaleString()}</div>
           </div>
-          <div className={`border rounded-2xl p-5 ${due > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
-            <div className="text-xs text-gray-600 font-bold mb-1">{t('المستحق (المتبقي)')}</div>
-            <div className={`text-2xl font-extrabold ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</div>
+          <div className={`border rounded-2xl p-5 ${due > 0.001 ? 'bg-rose-50 border-rose-200' : due < -0.001 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+            <div className="text-xs text-gray-600 font-bold mb-1">
+              {due < -0.001 ? t('ليك عند المورد (دفعت زيادة)') : t('المستحق (المتبقي)')}
+            </div>
+            <div className={`text-2xl font-extrabold ${due > 0.001 ? 'text-rose-600' : due < -0.001 ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {Math.abs(due).toLocaleString()}
+            </div>
           </div>
         </div>
 
@@ -192,7 +225,7 @@ export default function SupplierDetailPage() {
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-extrabold">{t('الدفعات')}</h3>
             {can('suppliers', 'edit') && (
-              <button onClick={() => setShowPaymentForm(true)} className="text-blue-600 text-sm font-bold hover:underline">
+              <button onClick={openPaymentForm} className="text-blue-600 text-sm font-bold hover:underline">
                 + {t('تسجيل دفعة')}
               </button>
             )}
@@ -203,22 +236,34 @@ export default function SupplierDetailPage() {
                 <tr className="bg-gray-50 text-gray-500 text-[11px]">
                   <th className="text-right px-4 py-2.5 font-bold">{t('التاريخ')}</th>
                   <th className="text-right px-4 py-2.5 font-bold">{t('المبلغ')}</th>
-                  <th className="text-right px-4 py-2.5 font-bold">{t('عن حفلة')}</th>
+                  <th className="text-right px-4 py-2.5 font-bold">{t('موزّعة على')}</th>
                   <th className="text-right px-4 py-2.5 font-bold">{t('ملاحظات')}</th>
                   <th className="text-right px-4 py-2.5 font-bold">{t('سجّلها')}</th>
                   <th className="text-right px-4 py-2.5 font-bold w-20">{t('إجراءات')}</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p) => (
+                {payments.map((p) => {
+                  const allocs = p.allocations || [];
+                  const allocatedSum = allocs.reduce((s, a) => s + a.amount, 0);
+                  const general = p.amount - allocatedSum;
+                  return (
                   <tr key={p.id} className="border-t border-gray-50">
                     <td className="px-4 py-2.5 text-xs text-gray-600">{new Date(p.date).toLocaleDateString(locale)}</td>
                     <td className="px-4 py-2.5 font-extrabold text-emerald-600">{p.amount.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-xs">
-                      {p.event ? (
-                        <Link to={`/accounts/${p.event.id}`} className="text-blue-600 hover:underline">{p.event.name}</Link>
+                      {allocs.length === 0 ? (
+                        <span className="text-gray-400">{t('دفعة عامة')}</span>
                       ) : (
-                        <span className="text-gray-400">{t('عامة')}</span>
+                        <div className="space-y-0.5">
+                          {allocs.map((a) => (
+                            <div key={a.id}>
+                              <Link to={`/accounts/${a.entry?.event?.id}`} className="text-blue-600 hover:underline">{a.entry?.event?.name || a.entry?.description}</Link>
+                              <span className="text-gray-500"> — {a.amount.toLocaleString()}</span>
+                            </div>
+                          ))}
+                          {general > 0.001 && <div className="text-gray-400">{t('عامة')}: {general.toLocaleString()}</div>}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-gray-600">{p.notes || '—'}</td>
@@ -229,7 +274,8 @@ export default function SupplierDetailPage() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {payments.length === 0 && (
                   <tr><td colSpan={6} className="text-center py-8 text-gray-500 text-sm">{t('مفيش دفعات لسه')}</td></tr>
                 )}
@@ -242,42 +288,83 @@ export default function SupplierDetailPage() {
       {/* ============ نافذة تسجيل دفعة ============ */}
       {showPaymentForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form onSubmit={savePayment} className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-3.5 shadow-xl">
+          <form onSubmit={savePayment} className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-3.5 shadow-xl">
             <h3 className="font-extrabold text-lg">{t('تسجيل دفعة')}</h3>
             <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-sm">
-              <span className="text-gray-600">{t('المستحق حالياً')}: </span>
-              <span className="font-extrabold text-rose-600">{due.toLocaleString()}</span>
+              <span className="text-gray-600">{due < -0.001 ? t('ليك عند المورد') : t('المستحق حالياً')}: </span>
+              <span className={`font-extrabold ${due < -0.001 ? 'text-amber-600' : 'text-rose-600'}`}>{Math.abs(due).toLocaleString()}</span>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold mb-1 text-gray-600">{t('المبلغ')}</label>
-              <input required autoFocus type="number" min={0} step="any" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold mb-1 text-gray-600">
-                {t('عن حفلة معيّنة؟')} <span className="font-normal text-gray-500">({t('اختياري')})</span>
-              </label>
-              <select value={payForm.eventId} onChange={(e) => setPayForm({ ...payForm, eventId: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="">{t('دفعة عامة (مش لحفلة بعينها)')}</option>
-                {events.map((row) => (
-                  <option key={row.event.id} value={row.event.id}>{row.event.name} — {row.event.number}</option>
-                ))}
-              </select>
-              <div className="text-[11px] text-gray-500 mt-1">
-                {t('لو الدفعة دي مقابل حفلة معيّنة، اختارها عشان "المستحق" يظهر صح جوه كشف حساب الحفلة نفسها')}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1 text-gray-600">{t('المبلغ')}</label>
+                <input required autoFocus type="number" min={0} step="any" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold mb-1 text-gray-600">{t('التاريخ')}</label>
-              <input required type="date" value={payForm.date} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              <div>
+                <label className="block text-xs font-bold mb-1 text-gray-600">{t('التاريخ')}</label>
+                <input required type="date" value={payForm.date} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold mb-1 text-gray-600">{t('ملاحظات')}</label>
               <input value={payForm.notes} onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </div>
+
+            {openInvoices.length > 0 && (
+              <div className="border border-gray-200 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-gray-700">{t('وزّع المبلغ على الفواتير')} <span className="font-normal text-gray-500">({t('اختياري')})</span></span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // توزيع تلقائي: املأ الفواتير من الأقدم للأحدث لحد ما المبلغ يخلص
+                      let rem = payAmountNum;
+                      const next = {};
+                      [...openInvoices].reverse().forEach((inv) => {
+                        if (rem <= 0) return;
+                        const take = Math.min(rem, inv.remaining);
+                        if (take > 0) { next[inv.id] = String(Math.round(take)); rem -= take; }
+                      });
+                      setAlloc(next);
+                    }}
+                    className="text-[11px] text-blue-600 font-bold hover:underline"
+                  >
+                    {t('توزيع تلقائي')}
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {openInvoices.map((inv) => (
+                    <div key={inv.id} className="flex items-center gap-2 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-gray-800 truncate">{inv.description}</div>
+                        <div className="text-gray-500">
+                          {inv.event?.name} · {t('متبقّي')}: <span className="font-bold text-rose-600">{Math.round(inv.remaining).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        max={inv.remaining}
+                        step="any"
+                        placeholder="0"
+                        value={alloc[inv.id] || ''}
+                        onChange={(e) => setAllocFor(inv.id, e.target.value)}
+                        className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between text-[11px] mt-2 pt-2 border-t border-gray-100">
+                  <span className="text-gray-500">{t('الموزّع')}: <span className="font-bold text-gray-700">{allocatedSum.toLocaleString()}</span></span>
+                  <span className={unallocated < -0.001 ? 'text-rose-600 font-bold' : 'text-gray-500'}>
+                    {unallocated >= 0 ? t('غير موزّع (دفعة عامة)') : t('زيادة عن الدفعة')}: <span className="font-bold">{Math.abs(unallocated).toLocaleString()}</span>
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-2 pt-1">
               <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition">{t('حفظ')}</button>

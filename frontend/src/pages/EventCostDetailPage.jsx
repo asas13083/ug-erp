@@ -572,7 +572,8 @@ export default function EventCostDetailPage() {
                 </thead>
                 <tbody>
                   {supplierEntries.entries.map((e) => {
-                    const due = e.total - e.paidAmount;
+                    const paid = e.paidTotal ?? e.paidAmount;
+                    const due = e.total - paid;
                     return (
                       <tr key={e.id} className="border-t border-gray-50 align-top">
                         <td className="px-3 py-2.5 font-bold">
@@ -599,7 +600,7 @@ export default function EventCostDetailPage() {
                           </div>
                         </td>
                         <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-emerald-600 whitespace-nowrap">{e.paidAmount.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-emerald-600 whitespace-nowrap">{paid.toLocaleString()}</td>
                         <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
                         <td className="px-3 py-2.5">
                           <div className="flex gap-2">
@@ -633,24 +634,6 @@ export default function EventCostDetailPage() {
                 )}
               </table>
             </div>
-
-            {supplierEntries.directPayments?.length > 0 && (
-              <div className="border-t border-gray-100 px-3 py-3">
-                <div className="text-xs font-bold text-gray-600 mb-1.5">{t('دفعات مباشرة للموردين اتسجّلت لصالح الحفلة دي (من ملف المورد)')}</div>
-                <div className="space-y-1">
-                  {supplierEntries.directPayments.map((p) => (
-                    <div key={p.id} className="flex justify-between text-xs text-gray-600">
-                      <span>
-                        <Link to={`/suppliers/${p.supplier.id}`} className="text-blue-600 hover:underline">{p.supplier.name}</Link>
-                        {' — '}{new Date(p.date).toLocaleDateString('ar-EG')}
-                        {p.notes ? ` · ${p.notes}` : ''}
-                      </span>
-                      <span className="font-bold text-emerald-600">{p.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 

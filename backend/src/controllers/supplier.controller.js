@@ -10,7 +10,14 @@ const { generateCode } = require('../utils/codeGenerator');
 const ENTRY_INCLUDE = {
   supplier: { select: { id: true, name: true, phone: true, company: true } },
   lines: true,
+  paymentAllocations: true,
 };
+
+/** المدفوع الكلي لفاتورة = المدفوع المباشر وقت إنشائها + كل التخصيصات من الدفعات */
+function entryPaid(entry) {
+  const allocated = (entry.paymentAllocations || []).reduce((s, a) => s + a.amount, 0);
+  return entry.paidAmount + allocated;
+}
 
 /** بيحسب إجمالي الفاتورة من بنودها، وبيتحقق إن البنود سليمة */
 function buildLines(rawLines) {
@@ -35,25 +42,19 @@ function buildLines(rawLines) {
 
 const listEventEntries = asyncHandler(async (req, res) => {
   const { eventId } = req.params;
-  const [entries, directPayments] = await Promise.all([
-    prisma.eventSupplierEntry.findMany({
-      where: { eventId },
-      include: ENTRY_INCLUDE,
-      orderBy: { date: 'asc' },
-    }),
-    // دفعات اتسجّلت من ملف المورد مباشرة وربطناها بالحفلة دي بالتحديد (مش
-    // جوه فاتورة) — لازم تتحسب هي كمان في "المدفوع" عشان المستحق يبقى صح
-    prisma.supplierPayment.findMany({
-      where: { eventId },
-      include: { supplier: { select: { id: true, name: true } }, user: { select: { fullName: true } } },
-      orderBy: { date: 'asc' },
-    }),
-  ]);
+  const rawEntries = await prisma.eventSupplierEntry.findMany({
+    where: { eventId },
+    include: ENTRY_INCLUDE,
+    orderBy: { date: 'asc' },
+  });
+  // بنرفق لكل فاتورة المدفوع الكلي (المباشر + التخصيصات) والمتبقّي عليها
+  const entries = rawEntries.map((e) => {
+    const paid = entryPaid(e);
+    return { ...e, paidTotal: paid, due: e.total - paid };
+  });
   const total = entries.reduce((s, e) => s + e.total, 0);
-  const paidWithInvoices = entries.reduce((s, e) => s + e.paidAmount, 0);
-  const directPaid = directPayments.reduce((s, p) => s + p.amount, 0);
-  const paid = paidWithInvoices + directPaid;
-  res.json({ success: true, data: { entries, directPayments, total, paid, due: total - paid } });
+  const paid = entries.reduce((s, e) => s + e.paidTotal, 0);
+  res.json({ success: true, data: { entries, total, paid, due: total - paid } });
 });
 
 const createEventEntry = asyncHandler(async (req, res) => {
@@ -308,43 +309,47 @@ const getSupplierProfile = asyncHandler(async (req, res) => {
   const [entries, payments] = await Promise.all([
     prisma.eventSupplierEntry.findMany({
       where: { supplierId: id },
-      include: { event: { select: { id: true, name: true, number: true, startDate: true } }, lines: true },
+      include: { event: { select: { id: true, name: true, number: true, startDate: true } }, lines: true, paymentAllocations: true },
       orderBy: { date: 'desc' },
     }),
     prisma.supplierPayment.findMany({
       where: { supplierId: id },
-      include: { user: { select: { fullName: true } }, event: { select: { id: true, name: true, number: true } } },
+      include: { user: { select: { fullName: true } }, allocations: { include: { entry: { select: { id: true, description: true, event: { select: { id: true, name: true, number: true } } } } } } },
       orderBy: { date: 'desc' },
     }),
   ]);
 
-  const totalInvoiced = entries.reduce((s, e) => s + e.total, 0);
-  const paidWithInvoices = entries.reduce((s, e) => s + e.paidAmount, 0);
-  const separatePayments = payments.reduce((s, p) => s + p.amount, 0);
-  const totalPaid = paidWithInvoices + separatePayments;
+  // المدفوع الكلي لكل فاتورة = مباشر + تخصيصات. المتبقّي = الإجمالي − ده.
+  const entriesEnriched = entries.map((e) => {
+    const paid = entryPaid(e);
+    return { ...e, paidTotal: paid, remaining: e.total - paid };
+  });
+
+  const totalInvoiced = entriesEnriched.reduce((s, e) => s + e.total, 0);
+  const totalPaid = entriesEnriched.reduce((s, e) => s + e.paidTotal, 0);
 
   const byEvent = new Map();
-  entries.forEach((e) => {
+  entriesEnriched.forEach((e) => {
     if (!byEvent.has(e.eventId)) byEvent.set(e.eventId, { event: e.event, total: 0, paid: 0, count: 0 });
     const row = byEvent.get(e.eventId);
     row.total += e.total;
-    row.paid += e.paidAmount;
+    row.paid += e.paidTotal;
     row.count += 1;
   });
-  // دفعات مباشرة مربوطة بحفلة معيّنة — تتحسب في "المدفوع" الخاص بالحفلة دي كمان
-  payments.forEach((p) => {
-    if (!p.eventId) return;
-    if (!byEvent.has(p.eventId)) byEvent.set(p.eventId, { event: p.event, total: 0, paid: 0, count: 0 });
-    byEvent.get(p.eventId).paid += p.amount;
-  });
+
+  // الفواتير اللي لسه عليها متبقّي — دي اللي بتظهر في شاشة توزيع الدفعة
+  const openInvoices = entriesEnriched
+    .filter((e) => e.remaining > 0.001)
+    .map((e) => ({ id: e.id, description: e.description, date: e.date, total: e.total, remaining: e.remaining, event: e.event }));
 
   res.json({
     success: true,
     data: {
       supplier,
-      entries,
+      entries: entriesEnriched,
       payments,
       events: Array.from(byEvent.values()),
+      openInvoices,
       totalInvoiced,
       totalPaid,
       due: totalInvoiced - totalPaid,
@@ -377,7 +382,7 @@ const listWithBalances = asyncHandler(async (req, res) => {
 
 const createPayment = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { amount, date, notes, eventId } = req.body;
+  const { amount, date, notes, allocations } = req.body;
 
   const amountNum = Number(amount);
   if (!Number.isFinite(amountNum) || amountNum <= 0) throw new AppError('مبلغ الدفعة لازم يكون أكبر من صفر', 400);
@@ -386,14 +391,46 @@ const createPayment = asyncHandler(async (req, res) => {
   const supplier = await prisma.supplier.findFirst({ where: { id, deletedAt: null } });
   if (!supplier) throw new AppError('المورد غير موجود', 404);
 
-  if (eventId) {
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) throw new AppError('الحفلة غير موجودة', 404);
+  // التخصيصات اختيارية: توزيع جزء (أو كل) الدفعة على فواتير معيّنة للمورد ده.
+  // بنتحقق إن كل فاتورة بتاعت المورد ده فعلاً، وإن المخصّص ليها ما يزيدش عن
+  // المتبقّي عليها، وإن مجموع التخصيصات ما يزيدش عن مبلغ الدفعة نفسه.
+  let cleanAllocations = [];
+  if (Array.isArray(allocations) && allocations.length > 0) {
+    const entryIds = allocations.map((a) => a.entryId);
+    const entries = await prisma.eventSupplierEntry.findMany({
+      where: { id: { in: entryIds }, supplierId: id },
+      include: { paymentAllocations: true },
+    });
+    const entryMap = new Map(entries.map((e) => [e.id, e]));
+
+    let allocatedSum = 0;
+    for (const a of allocations) {
+      const amt = Number(a.amount);
+      if (!Number.isFinite(amt) || amt <= 0) continue; // نتجاهل السطور الفاضية
+      const entry = entryMap.get(a.entryId);
+      if (!entry) throw new AppError('فاتورة غير موجودة أو مش تابعة للمورد ده', 400);
+      const remaining = entry.total - entryPaid(entry);
+      if (amt > remaining + 0.001) {
+        throw new AppError(`المبلغ المخصّص لفاتورة "${entry.description}" أكبر من المتبقّي عليها (${Math.round(remaining)})`, 400);
+      }
+      allocatedSum += amt;
+      cleanAllocations.push({ entryId: a.entryId, amount: amt });
+    }
+    if (allocatedSum > amountNum + 0.001) {
+      throw new AppError('مجموع المبالغ الموزّعة على الفواتير أكبر من قيمة الدفعة', 400);
+    }
   }
 
   const payment = await prisma.supplierPayment.create({
-    data: { supplierId: id, amount: amountNum, date: new Date(date), notes, userId: req.user.id, eventId: eventId || null },
-    include: { user: { select: { fullName: true } }, event: { select: { id: true, name: true, number: true } } },
+    data: {
+      supplierId: id,
+      amount: amountNum,
+      date: new Date(date),
+      notes,
+      userId: req.user.id,
+      allocations: cleanAllocations.length ? { create: cleanAllocations } : undefined,
+    },
+    include: { user: { select: { fullName: true } }, allocations: true },
   });
 
   await logActivity({
@@ -436,7 +473,7 @@ const exportSupplierExcel = asyncHandler(async (req, res) => {
   const [entries, payments] = await Promise.all([
     prisma.eventSupplierEntry.findMany({
       where: { supplierId: id },
-      include: { event: { select: { name: true } }, lines: true },
+      include: { event: { select: { name: true } }, lines: true, paymentAllocations: true },
       orderBy: { date: 'desc' },
     }),
     prisma.supplierPayment.findMany({ where: { supplierId: id }, orderBy: { date: 'desc' } }),
@@ -458,7 +495,8 @@ const exportSupplierExcel = asyncHandler(async (req, res) => {
       ]);
     });
     highlightRows.push(rows.length);
-    rows.push(['', '', `إجمالي: ${e.description}`, '', '', `مدفوع: ${e.paidAmount}`, e.total]);
+    const paid = e.paidAmount + (e.paymentAllocations || []).reduce((s, a) => s + a.amount, 0);
+    rows.push(['', '', `إجمالي: ${e.description}`, '', '', `مدفوع: ${Math.round(paid)}`, e.total]);
   });
 
   payments.forEach((p) => {

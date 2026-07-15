@@ -286,7 +286,6 @@ model Event {
   costItems      EventCostItem[]
   costEntries    EventCostRecordEntry[]
   supplierEntries EventSupplierEntry[]
-  supplierPayments SupplierPayment[]
 
   @@index([clientId])
   @@index([startDate, endDate])
@@ -810,6 +809,7 @@ model EventSupplierEntry {
   supplier Supplier @relation(fields: [supplierId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
   lines    EventSupplierEntryLine[]
+  paymentAllocations SupplierPaymentAllocation[]
 
   @@index([eventId])
   @@index([supplierId])
@@ -838,8 +838,10 @@ model EventSupplierEntryLine {
   @@map("event_supplier_entry_lines")
 }
 
-// دفعة لاحقة لمورد — مش مرتبطة بفاتورة واحدة بعينها، دي دفعة عامة على
-// حسابه كله (زي ما بيحصل فعلياً: بتدفعله مبلغ يخصم من إجمالي المستحق)
+// دفعة لمورد. المبلغ ممكن يتوزّع على فواتير (بنود) معيّنة عن طريق
+// SupplierPaymentAllocation — وده بيخلّي "المستحق" في كل حفلة دقيق، حتى لو
+// الدفعة الواحدة غطّت أكتر من فاتورة في أكتر من حفلة. أي جزء من الدفعة
+// مش متوزّع بيفضل "دفعة عامة" على حساب المورد.
 model SupplierPayment {
   id         String   @id @default(cuid())
   supplierId String
@@ -847,16 +849,28 @@ model SupplierPayment {
   date       DateTime
   notes      String?
   userId     String
-  // اختياري — لو الدفعة دي بخصوص حفلة معيّنة بالتحديد، عشان "المستحق" في
-  // كشف الحفلة نفسها ياخدها في الاعتبار (مش بس المستحق العام للمورد)
-  eventId    String?
   createdAt  DateTime @default(now())
 
-  supplier Supplier @relation(fields: [supplierId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
-  event    Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+  allocations SupplierPaymentAllocation[]
 
   @@index([supplierId])
-  @@index([eventId])
   @@map("supplier_payments")
+}
+
+// تخصيص جزء من دفعة لفاتورة مورد معيّنة (بند في حفلة).
+// مجموع تخصيصات أي دفعة <= مبلغ الدفعة. والباقي "عام" على حساب المورد.
+model SupplierPaymentAllocation {
+  id        String @id @default(cuid())
+  paymentId String
+  entryId   String
+  amount    Float
+
+  payment SupplierPayment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  entry   EventSupplierEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([entryId])
+  @@map("supplier_payment_allocations")
 }

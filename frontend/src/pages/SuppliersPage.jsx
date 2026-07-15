@@ -109,8 +109,9 @@ export default function SuppliersPage() {
                   <td className="px-4 py-3 text-gray-600">{s.phone || '—'}</td>
                   <td className="px-4 py-3 font-bold">{s.totalInvoiced.toLocaleString()}</td>
                   <td className="px-4 py-3 text-emerald-600">{s.totalPaid.toLocaleString()}</td>
-                  <td className={`px-4 py-3 font-extrabold ${s.due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    {s.due.toLocaleString()}
+                  <td className={`px-4 py-3 font-extrabold ${s.due > 0.001 ? 'text-rose-600' : s.due < -0.001 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {Math.abs(s.due).toLocaleString()}
+                    {s.due < -0.001 && <span className="block text-[10px] font-normal text-amber-600">{t('دفعت زيادة')}</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-3">
