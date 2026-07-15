@@ -33,7 +33,6 @@ export default function EventCostDetailPage() {
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   // ============ الموردين ============
-  const [showSuppliers, setShowSuppliers] = useState(false);
   const [supplierEntries, setSupplierEntries] = useState({ entries: [], total: 0, paid: 0, due: 0 });
   const [suppliersList, setSuppliersList] = useState([]);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
@@ -42,6 +41,8 @@ export default function EventCostDetailPage() {
   const [supLines, setSupLines] = useState([{ itemName: '', unit: 'قطعة', count: 1, unitPrice: '' }]);
   // المورد المفتوح حالياً في كشف الحفلة (نضغط على اسمه تظهر فواتيره)
   const [openSupplierId, setOpenSupplierId] = useState(null);
+  // المورد المفتوح داخل الكشف الرئيسي نفسه (كل مورد بند مستقل)
+  const [openSheetSupplierId, setOpenSheetSupplierId] = useState(null);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
 
   const [categoryEntries, setCategoryEntries] = useState({ entries: [], total: 0 });
@@ -118,13 +119,13 @@ export default function EventCostDetailPage() {
   }
 
   useEffect(() => {
-    if (showSuppliers) {
-      loadSupplierEntries();
-      api.get('/suppliers').then(({ data }) => setSuppliersList(data.data)).catch(() => {});
-    }
-  }, [showSuppliers, eventId]);
+    // بنحمّل الموردين دايماً (مش بس لما تفتح قسم التفاصيل) لأن كل مورد بقى
+    // بند مستقل ظاهر في الكشف الرئيسي نفسه
+    loadSupplierEntries();
+    api.get('/suppliers').then(({ data }) => setSuppliersList(data.data)).catch(() => {});
+  }, [eventId]);
 
-  function openSupplierForm(entry = null) {
+  function openSupplierForm(entry = null, presetSupplierId = '') {
     setEditingSupplierEntry(entry);
     setSupForm(
       entry
@@ -136,7 +137,7 @@ export default function EventCostDetailPage() {
             imageUrl: entry.imageUrl || '',
             notes: entry.notes || '',
           }
-        : { supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', paidAmount: 0, imageUrl: '', notes: '' }
+        : { supplierId: presetSupplierId || '', date: new Date().toISOString().slice(0, 10), description: '', paidAmount: 0, imageUrl: '', notes: '' }
     );
     setSupLines(
       entry && entry.lines?.length
@@ -488,7 +489,17 @@ export default function EventCostDetailPage() {
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-x-auto mb-5">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="font-extrabold text-sm">{t('الكشف')}</div>
-            <button onClick={() => openItemForm(null)} className="text-blue-600 text-xs font-bold hover:underline">+ {t('إضافة بند')}</button>
+            <div className="flex items-center gap-3">
+              {supplierGroups.length > 0 && (
+                <button
+                  onClick={() => downloadFile(`/event-costs/${eventId}/suppliers/export-excel`, `موردين-${event.number}.xlsx`)}
+                  className="border border-gray-200 hover:border-gray-300 text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                >
+                  {t('موردين')} Excel
+                </button>
+              )}
+              <button onClick={() => openItemForm(null)} className="text-blue-600 text-xs font-bold hover:underline">+ {t('إضافة بند')}</button>
+            </div>
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -512,25 +523,96 @@ export default function EventCostDetailPage() {
                   </td>
                 </tr>
               ))}
-              {/* صف الموردين — تصنيف مستقل بيتحسب في الإجمالي زي باقي التصنيفات */}
-              <tr className="border-t border-gray-100 bg-amber-50/40">
-                <td className="px-4 py-3 font-bold text-amber-800">
-                  {t('الموردين')} <span className="text-[10px] text-gray-500 font-normal">({t('سجل متراكم')})</span>
-                </td>
-                <td className="px-4 py-3 font-extrabold text-amber-800">{(summary.suppliersTotal || 0).toLocaleString()}</td>
-                <td className="px-4 py-3 text-xs">
-                  {summary.suppliersDue > 0 ? (
-                    <span className="text-rose-600 font-bold">{t('مستحق')}: {summary.suppliersDue.toLocaleString()}</span>
-                  ) : (
-                    <span className="text-emerald-600 font-bold">{t('مدفوع بالكامل')} ✓</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => setShowSuppliers((v) => !v)} className="text-blue-600 text-xs font-bold hover:underline">
-                    {showSuppliers ? t('إخفاء التفاصيل') : t('عرض التفاصيل اليومية')}
-                  </button>
-                </td>
-              </tr>
+              {/* الموردين — كل مورد بند مستقل في الكشف (بيتحسب في الإجمالي زي التصنيفات) */}
+              {supplierGroups.map((g) => {
+                const isOpen = openSheetSupplierId === g.supplierId;
+                return (
+                  <React.Fragment key={`sup-${g.supplierId}`}>
+                    <tr className="border-t border-gray-100 bg-amber-50/40">
+                      <td className="px-4 py-3 font-bold text-amber-800">
+                        <span className="text-gray-400 text-xs mr-1">{isOpen ? '▾' : '▸'}</span>
+                        {g.supplier?.name}
+                        <span className="text-[10px] text-gray-500 font-normal"> ({t('مورد')})</span>
+                      </td>
+                      <td className="px-4 py-3 font-extrabold text-amber-800">{g.total.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {g.due > 0.001 ? (
+                          <span className="text-rose-600 font-bold">{t('عليه')}: {g.due.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-emerald-600 font-bold">{t('مدفوع بالكامل')} ✓</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-3">
+                          <button onClick={() => setOpenSheetSupplierId(isOpen ? null : g.supplierId)} className="text-blue-600 text-xs font-bold hover:underline">
+                            {isOpen ? t('إخفاء') : t('عرض الفواتير')}
+                          </button>
+                          {can('accounts', 'create') && (
+                            <button onClick={() => openSupplierForm(null, g.supplierId)} className="text-amber-700 text-xs font-bold hover:underline">+ {t('فاتورة')}</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {isOpen && g.entries.map((e) => {
+                      const paid = e.paidTotal ?? e.paidAmount;
+                      const due = e.total - paid;
+                      return (
+                        <tr key={e.id} className="border-t border-gray-50 bg-amber-50/10">
+                          <td className="px-4 py-2.5 pr-10">
+                            <div className="text-[11px] text-gray-500 mb-0.5">{new Date(e.date).toLocaleDateString(locale)}</div>
+                            <div className="font-bold text-sm">{e.description}</div>
+                            <div className="mt-1 space-y-0.5">
+                              {(e.lines || []).map((l) => (
+                                <div key={l.id} className="text-xs">
+                                  <span className="font-bold">{l.itemName}</span>
+                                  <span className="text-gray-500"> — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}</span>
+                                  {l.addedToWarehouseId && <span className="text-emerald-600 font-bold"> ✓</span>}
+                                </div>
+                              ))}
+                            </div>
+                            {e.imageUrl && (
+                              <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
+                                <img src={getAssetUrl(e.imageUrl)} alt="" className="w-10 h-10 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
+                              </a>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 align-top">
+                            <div className="font-bold">{e.total.toLocaleString()}</div>
+                            <div className="text-[11px] text-emerald-600">{t('مدفوع')}: {paid.toLocaleString()}</div>
+                            {due > 0.001 && <div className="text-[11px] text-rose-600">{t('متبقي')}: {due.toLocaleString()}</div>}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-500 align-top">—</td>
+                          <td className="px-4 py-2.5 align-top">
+                            <div className="flex gap-3">
+                              {can('accounts', 'edit') && (
+                                <button onClick={() => openSupplierForm(e)} className="text-blue-600 text-xs font-bold hover:underline">{t('تعديل')}</button>
+                              )}
+                              {can('accounts', 'delete') && (
+                                <button onClick={() => deleteSupplierEntry(e)} className="text-rose-600 text-xs font-bold hover:underline">{t('حذف')}</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+              {supplierGroups.length === 0 && (
+                <tr className="border-t border-gray-100 bg-amber-50/40">
+                  <td className="px-4 py-3 font-bold text-amber-800">
+                    {t('الموردين')}
+                  </td>
+                  <td className="px-4 py-3 text-gray-400">0</td>
+                  <td className="px-4 py-3 text-xs text-gray-400">{t('مفيش موردين لسه')}</td>
+                  <td className="px-4 py-3">
+                    {can('accounts', 'create') && (
+                      <button onClick={() => openSupplierForm(null)} className="text-amber-700 text-xs font-bold hover:underline">+ {t('إضافة فاتورة مورد')}</button>
+                    )}
+                  </td>
+                </tr>
+              )}
               {summary.costItems.map((item) => (
                 <tr key={item.id} className="border-t border-gray-100">
                   <td className="px-4 py-3 font-bold">{item.label}</td>
@@ -554,121 +636,6 @@ export default function EventCostDetailPage() {
             </tfoot>
           </table>
         </div>
-
-        {/* ============ تفاصيل الموردين ============ */}
-        {showSuppliers && (
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-6">
-            <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="font-extrabold">{t('الموردين')} — {t('التفاصيل')}</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => downloadFile(`/event-costs/${eventId}/suppliers/export-excel`, `موردين-${event.number}.xlsx`)}
-                  className="border border-gray-200 hover:border-gray-300 text-xs font-bold px-3 py-2 rounded-lg transition"
-                >
-                  Excel
-                </button>
-                {can('accounts', 'create') && (
-                  <button onClick={() => openSupplierForm()} className="text-blue-600 text-xs font-bold hover:underline">
-                    + {t('إضافة فاتورة مورد')}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-500 text-[11px]">
-                    <th className="text-right px-3 py-2 font-bold">{t('المورد')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('عدد الفواتير')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('الإجمالي')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('المدفوع')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('عليه (المتبقي)')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {supplierGroups.map((g) => {
-                    const isOpen = openSupplierId === g.supplierId;
-                    return (
-                      <React.Fragment key={g.supplierId}>
-                        <tr
-                          onClick={() => setOpenSupplierId(isOpen ? null : g.supplierId)}
-                          className="border-t border-gray-100 hover:bg-gray-50/60 transition cursor-pointer"
-                        >
-                          <td className="px-3 py-3 font-bold">
-                            <span className="text-gray-400 text-xs mr-1">{isOpen ? '▾' : '▸'}</span>
-                            {g.supplier?.name}
-                          </td>
-                          <td className="px-3 py-3 text-gray-600">{g.entries.length}</td>
-                          <td className="px-3 py-3 font-extrabold whitespace-nowrap">{g.total.toLocaleString()}</td>
-                          <td className="px-3 py-3 text-emerald-600 whitespace-nowrap">{g.paid.toLocaleString()}</td>
-                          <td className={`px-3 py-3 font-bold whitespace-nowrap ${g.due > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>{g.due.toLocaleString()}</td>
-                        </tr>
-
-                        {isOpen && g.entries.map((e) => {
-                          const paid = e.paidTotal ?? e.paidAmount;
-                          const due = e.total - paid;
-                          return (
-                            <tr key={e.id} className="bg-gray-50/40 border-t border-gray-50 align-top">
-                              <td className="px-3 py-2.5" colSpan={2}>
-                                <div className="flex items-start gap-2 pr-4">
-                                  <div className="flex-1">
-                                    <div className="text-xs text-gray-500 mb-0.5">{new Date(e.date).toLocaleDateString(locale)}</div>
-                                    <div className="font-bold text-sm">{e.description}</div>
-                                    <div className="mt-1 space-y-0.5">
-                                      {(e.lines || []).map((l) => (
-                                        <div key={l.id} className="text-xs">
-                                          <span className="font-bold">{l.itemName}</span>
-                                          <span className="text-gray-500"> — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}</span>
-                                          {l.addedToWarehouseId && <span className="text-emerald-600 font-bold"> ✓</span>}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {e.imageUrl && (
-                                      <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
-                                        <img src={getAssetUrl(e.imageUrl)} alt="" className="w-10 h-10 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
-                                      </a>
-                                    )}
-                                    <div className="flex gap-3 mt-1">
-                                      {can('accounts', 'edit') && (
-                                        <button onClick={() => openSupplierForm(e)} className="text-blue-600 text-xs font-bold hover:underline">{t('تعديل')}</button>
-                                      )}
-                                      {can('accounts', 'delete') && (
-                                        <button onClick={() => deleteSupplierEntry(e)} className="text-rose-600 text-xs font-bold hover:underline">{t('حذف')}</button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
-                              <td className="px-3 py-2.5 text-emerald-600 whitespace-nowrap">{paid.toLocaleString()}</td>
-                              <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${due > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
-                            </tr>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                  {supplierGroups.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير موردين لسه')}</td>
-                    </tr>
-                  )}
-                </tbody>
-                {supplierGroups.length > 0 && (
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200 bg-gray-50 font-extrabold">
-                      <td className="px-3 py-2.5" colSpan={2}>{t('الإجمالي')}</td>
-                      <td className="px-3 py-2.5">{supplierEntries.total.toLocaleString()}</td>
-                      <td className="px-3 py-2.5 text-emerald-600">{supplierEntries.paid.toLocaleString()}</td>
-                      <td className={`px-3 py-2.5 ${supplierEntries.due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{supplierEntries.due.toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </div>
-        )}
 
         {expandedCategory && (
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 mb-5">
