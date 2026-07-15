@@ -74,7 +74,7 @@ export default function CustodyTransferPage() {
       setFromEventId('');
       setToEventId('');
       setReceiverName('');
-      setTransportInfo('');
+      setVehicles([]);
       setNotes('');
     } catch (err) {
       setError(err.response?.data?.message || t('حدث خطأ أثناء نقل العهدة'));

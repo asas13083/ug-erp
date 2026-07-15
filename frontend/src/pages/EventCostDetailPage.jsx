@@ -486,6 +486,20 @@ export default function EventCostDetailPage() {
           )}
         </div>
 
+        {summary.suppliersTotal > 0 && (
+          <div className={`border rounded-2xl p-5 mb-5 flex items-center justify-between ${summary.suppliersDue > 0.001 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+            <div>
+              <div className="text-xs text-gray-600 font-bold mb-1">{t('إجمالي مديونية الموردين في الحفلة دي')}</div>
+              <div className={`text-2xl font-extrabold ${summary.suppliersDue > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {summary.suppliersDue.toLocaleString()}
+              </div>
+            </div>
+            <div className="text-xs text-gray-500 text-left">
+              {t('إجمالي فواتير الموردين')}: <b>{summary.suppliersTotal.toLocaleString()}</b>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-x-auto mb-5">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="font-extrabold text-sm">{t('الكشف')}</div>

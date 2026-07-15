@@ -68,6 +68,7 @@ export default function ReturnVouchersListPage() {
         <div><b>رقم الإذن:</b> ${esc(v.number)}</div>
         <div><b>التاريخ:</b> ${new Date(v.createdAt).toLocaleString('ar-EG')}</div>
         <div><b>الحفلة:</b> ${esc(v.event?.name || '—')}</div>
+        <div><b>رجع لمخزن:</b> ${esc(v.warehouse?.name || '—')}</div>
         ${v.handedBy ? `<div><b>المُسلّم:</b> ${esc(v.handedBy.fullName)}</div>` : ''}
         ${v.receivedBy ? `<div><b>المُستلم من الأوبريشن:</b> ${esc(v.receivedBy.fullName)}</div>` : ''}
         <div><b>بواسطة:</b> ${esc(v.user?.fullName || '—')}</div>
@@ -173,6 +174,7 @@ export default function ReturnVouchersListPage() {
                 <th className="text-right px-4 py-3 font-bold w-6"></th>
                 <th className="text-right px-4 py-3 font-bold">{t('الرقم')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الحفلة')}</th>
+                <th className="text-right px-4 py-3 font-bold">{t('راح فين')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('بواسطة')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('النقل')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الحالة')}</th>
@@ -190,6 +192,11 @@ export default function ReturnVouchersListPage() {
                     <td className="px-4 py-3 text-gray-400">{expandedId === v.id ? '▾' : '▸'}</td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-600">{v.number}</td>
                     <td className="px-4 py-3 font-bold">{v.event?.name}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className="text-gray-500">{v.event?.name}</span>
+                      <span className="text-gray-400 mx-1">←</span>
+                      <span className="font-bold">{v.warehouse?.name}</span>
+                    </td>
                     <td className="px-4 py-3 text-xs">
                       {v.user?.fullName || '—'}
                       {(v.handedBy || v.receivedBy) && (
@@ -223,7 +230,7 @@ export default function ReturnVouchersListPage() {
                   </tr>
                   {expandedId === v.id && (
                     <tr className="bg-gray-50/70">
-                      <td colSpan={8} className="px-6 py-3">
+                      <td colSpan={9} className="px-6 py-3">
                         <div className="text-xs font-bold text-gray-500 mb-1.5">{t('بنود الإذن')}</div>
                         <table className="w-full text-xs bg-white rounded-lg overflow-hidden border border-gray-100">
                           <thead>
@@ -252,7 +259,7 @@ export default function ReturnVouchersListPage() {
                   )}
                 </Fragment>
               ))}
-              {vouchers.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-gray-600">{t('لا توجد أذون مرتجع بعد')}</td></tr>}
+              {vouchers.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-gray-600">{t("لا توجد أذون مرتجع بعد")}</td></tr>}
             </tbody>
           </table>
           <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPageChange={setPage} />

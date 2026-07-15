@@ -45,13 +45,14 @@ export default function AccountsPage() {
   }
 
   const overallTotal = meta.overallTotal || 0;
+  const overallSuppliersDue = meta.overallSuppliersDue || 0;
 
   function exportPdf() {
-    const rows = events.map((ev) => `<tr><td>${esc(ev.number)}</td><td>${esc(ev.name)}</td><td>${esc(ev.client?.name || '—')}</td><td>${new Date(ev.startDate).toLocaleDateString('ar-EG')}</td><td>${(ev.suppliersTotal || 0).toLocaleString()}</td><td>${ev.costsTotal.toLocaleString()}</td><td>${ev.laborDaysCount || '—'}</td></tr>`).join('');
+    const rows = events.map((ev) => `<tr><td>${esc(ev.number)}</td><td>${esc(ev.name)}</td><td>${esc(ev.client?.name || '—')}</td><td>${new Date(ev.startDate).toLocaleDateString('ar-EG')}</td><td>${(ev.suppliersTotal || 0).toLocaleString()}</td><td>${(ev.suppliersDue || 0).toLocaleString()}</td><td>${ev.costsTotal.toLocaleString()}</td><td>${ev.laborDaysCount || '—'}</td></tr>`).join('');
     downloadPdf(
       'كشوفات تكاليف الحفلات',
-      `<table><thead><tr><th>رقم الحفلة</th><th>اسم الحفلة</th><th>العميل</th><th>التاريخ</th><th>الموردين</th><th>الإجمالي</th><th>عدد أيام العمالة</th></tr></thead><tbody>${rows}
-        <tr style="font-weight:bold; background:#f3f4f6;"><td colspan="5">إجمالي كل الحفلات</td><td>${overallTotal.toLocaleString()}</td><td></td></tr>
+      `<table><thead><tr><th>رقم الحفلة</th><th>اسم الحفلة</th><th>العميل</th><th>التاريخ</th><th>الموردين</th><th>مديونية الموردين</th><th>الإجمالي</th><th>عدد أيام العمالة</th></tr></thead><tbody>${rows}
+        <tr style="font-weight:bold; background:#f3f4f6;"><td colspan="5">إجمالي كل الحفلات</td><td>${overallSuppliersDue.toLocaleString()}</td><td>${overallTotal.toLocaleString()}</td><td></td></tr>
       </tbody></table>`,
       { filename: 'كشوفات-تكاليف-الحفلات.pdf' }
     );
@@ -75,9 +76,17 @@ export default function AccountsPage() {
         }
       />
       <div className="p-7">
-        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm mb-5 inline-block">
-          <div className="text-2xl font-extrabold text-blue-600">{overallTotal.toLocaleString()}</div>
-          <div className="text-xs text-gray-600 font-medium mt-1">{t('إجمالي كل الحفلات المعروضة دلوقتي')}</div>
+        <div className="flex flex-wrap gap-4 mb-5">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm inline-block">
+            <div className="text-2xl font-extrabold text-blue-600">{overallTotal.toLocaleString()}</div>
+            <div className="text-xs text-gray-600 font-medium mt-1">{t('إجمالي كل الحفلات المعروضة دلوقتي')}</div>
+          </div>
+          {overallSuppliersDue > 0.001 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 shadow-sm inline-block">
+              <div className="text-2xl font-extrabold text-rose-600">{overallSuppliersDue.toLocaleString()}</div>
+              <div className="text-xs text-gray-600 font-medium mt-1">{t('إجمالي مديونية الموردين لكل الحفلات المعروضة')}</div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -108,6 +117,7 @@ export default function AccountsPage() {
                 <th className="text-right px-4 py-3 font-bold">{t('العميل')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('التاريخ')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الموردين')}</th>
+                <th className="text-right px-4 py-3 font-bold">{t('مديونية الموردين')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الإجمالي')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('عدد أيام العمالة')}</th>
               </tr>
@@ -122,11 +132,12 @@ export default function AccountsPage() {
                   <td className="px-4 py-3">{ev.client?.name || '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{new Date(ev.startDate).toLocaleDateString(locale)}</td>
                   <td className="px-4 py-3 text-amber-700 font-bold">{(ev.suppliersTotal || 0).toLocaleString()}</td>
+                  <td className={`px-4 py-3 font-bold ${ev.suppliersDue > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>{(ev.suppliersDue || 0).toLocaleString()}</td>
                   <td className="px-4 py-3 font-extrabold">{ev.costsTotal.toLocaleString()}</td>
                   <td className="px-4 py-3">{ev.laborDaysCount || '—'}</td>
                 </tr>
               ))}
-              {events.length === 0 && <tr><td colSpan={7} className="text-center py-10 text-gray-600">{t('لا توجد حفلات مطابقة')}</td></tr>}
+              {events.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-gray-600">{t('لا توجد حفلات مطابقة')}</td></tr>}
             </tbody>
           </table>
           <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPageChange={setPage} />

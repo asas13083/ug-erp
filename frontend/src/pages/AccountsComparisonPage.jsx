@@ -26,13 +26,13 @@ export default function AccountsComparisonPage() {
     const rows = data.rows
       .map(
         (r) =>
-          `<tr><td>${esc(r.name)}</td><td>${new Date(r.startDate).toLocaleDateString('ar-EG')}</td><td>${r.itemsTotal.toLocaleString()}</td><td>${r.categoryTotals.DECOR_LABOR.toLocaleString()}</td><td>${r.categoryTotals.UNIFORMS.toLocaleString()}</td><td>${r.categoryTotals.TRANSPORT.toLocaleString()}</td><td>${r.categoryTotals.MICROBUS.toLocaleString()}</td><td>${r.suppliersTotal.toLocaleString()}</td><td>${r.grandTotal.toLocaleString()}</td></tr>`
+          `<tr><td>${esc(r.name)}</td><td>${new Date(r.startDate).toLocaleDateString('ar-EG')}</td><td>${r.itemsTotal.toLocaleString()}</td><td>${r.categoryTotals.DECOR_LABOR.toLocaleString()}</td><td>${r.categoryTotals.UNIFORMS.toLocaleString()}</td><td>${r.categoryTotals.TRANSPORT.toLocaleString()}</td><td>${r.categoryTotals.MICROBUS.toLocaleString()}</td><td>${r.suppliersTotal.toLocaleString()}</td><td>${r.suppliersDue.toLocaleString()}</td><td>${r.grandTotal.toLocaleString()}</td></tr>`
       )
       .join('');
     downloadPdf(
       'تقرير مقارنة الحفلات',
-      `<table><thead><tr><th>الحفلة</th><th>التاريخ</th><th>بنود التوتال</th><th>عمالة الديكور</th><th>البدلات</th><th>النقل</th><th>الميكروباص</th><th>الموردين</th><th>الإجمالي</th></tr></thead><tbody>${rows}
-        <tr style="font-weight:bold; background:#f3f4f6;"><td colspan="8">إجمالي كل الحفلات</td><td>${data.overallTotal.toLocaleString()}</td></tr>
+      `<table><thead><tr><th>الحفلة</th><th>التاريخ</th><th>بنود التوتال</th><th>عمالة الديكور</th><th>البدلات</th><th>النقل</th><th>الميكروباص</th><th>الموردين</th><th>مديونية الموردين</th><th>الإجمالي</th></tr></thead><tbody>${rows}
+        <tr style="font-weight:bold; background:#f3f4f6;"><td colspan="8">إجمالي كل الحفلات</td><td>${data.overallSuppliersDue.toLocaleString()}</td><td>${data.overallTotal.toLocaleString()}</td></tr>
       </tbody></table>`,
       { filename: 'تقرير-مقارنة-الحفلات.pdf' }
     );
@@ -82,6 +82,12 @@ export default function AccountsComparisonPage() {
             <div className="text-2xl font-extrabold text-purple-600">{Math.round(data.averagePerEvent).toLocaleString()}</div>
             <div className="text-xs text-gray-600 font-medium mt-1">{t('متوسط تكلفة الحفلة')}</div>
           </div>
+          {data.overallSuppliersDue > 0.001 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 shadow-sm">
+              <div className="text-2xl font-extrabold text-rose-600">{data.overallSuppliersDue.toLocaleString()}</div>
+              <div className="text-xs text-gray-600 font-medium mt-1">{t('إجمالي مديونية الموردين لكل الحفلات')}</div>
+            </div>
+          )}
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <div className="text-sm font-bold text-gray-700 space-y-0.5">
               {data.categorySums.map((c) => (
@@ -105,6 +111,7 @@ export default function AccountsComparisonPage() {
                   <th key={key} className="text-right px-4 py-3 font-bold">{t(label)}</th>
                 ))}
                 <th className="text-right px-4 py-3 font-bold">{t('الموردين')}</th>
+                <th className="text-right px-4 py-3 font-bold">{t('مديونية الموردين')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الإجمالي')}</th>
                 <th className="text-right px-4 py-3 font-bold w-24">{t('إجراءات')}</th>
               </tr>
@@ -121,13 +128,14 @@ export default function AccountsComparisonPage() {
                     <td key={key} className="px-4 py-3">{r.categoryTotals[key].toLocaleString()}</td>
                   ))}
                   <td className="px-4 py-3 text-amber-700 font-bold">{r.suppliersTotal.toLocaleString()}</td>
+                  <td className={`px-4 py-3 font-bold ${r.suppliersDue > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>{r.suppliersDue.toLocaleString()}</td>
                   <td className="px-4 py-3 font-extrabold">{r.grandTotal.toLocaleString()}</td>
                   <td className="px-4 py-3">
                     <Link to={`/accounts/${r.id}`} className="text-blue-600 text-xs font-bold hover:underline">{t('الكشف')}</Link>
                   </td>
                 </tr>
               ))}
-              {data.rows.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-gray-600">{t('لا توجد كشوفات مسجّلة في الفترة دي')}</td></tr>}
+              {data.rows.length === 0 && <tr><td colSpan={11} className="text-center py-10 text-gray-600">{t('لا توجد كشوفات مسجّلة في الفترة دي')}</td></tr>}
             </tbody>
           </table>
         </div>

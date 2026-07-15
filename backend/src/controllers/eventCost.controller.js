@@ -69,15 +69,28 @@ const getSummary = asyncHandler(async (req, res) => {
 const getTransportSuggestions = asyncHandler(async (req, res) => {
   const { eventId } = req.params;
 
-  const [issueVouchers, returnVouchers, custodyOut, custodyIn, existingImports] = await Promise.all([
+  const [issueVouchers, returnVouchers, custodyOut, custodyIn, existingImportsForThisEvent] = await Promise.all([
     prisma.issueVoucher.findMany({ where: { eventId, status: 'CONFIRMED', vehicles: { not: null } }, select: { id: true, number: true, createdAt: true, vehicles: true } }),
     prisma.returnVoucher.findMany({ where: { eventId, status: 'CONFIRMED', vehicles: { not: null } }, select: { id: true, number: true, createdAt: true, vehicles: true } }),
-    prisma.custodyTransfer.findMany({ where: { fromEventId: eventId, status: 'CONFIRMED', vehicles: { not: null } }, select: { id: true, number: true, createdAt: true, vehicles: true } }),
-    prisma.custodyTransfer.findMany({ where: { toEventId: eventId, status: 'CONFIRMED', vehicles: { not: null } }, select: { id: true, number: true, createdAt: true, vehicles: true } }),
+    prisma.custodyTransfer.findMany({ where: { fromEventId: eventId, status: 'CONFIRMED', vehicles: { not: null } }, select: { id: true, number: true, createdAt: true, vehicles: true, toEvent: { select: { name: true } } } }),
+    prisma.custodyTransfer.findMany({ where: { toEventId: eventId, status: 'CONFIRMED', vehicles: { not: null } }, select: { id: true, number: true, createdAt: true, vehicles: true, fromEvent: { select: { name: true } } } }),
     prisma.eventCostRecordEntry.findMany({ where: { eventId, category: 'TRANSPORT', sourceType: { not: null } }, select: { sourceType: true, sourceId: true, sourceVehicleIndex: true } }),
   ]);
 
-  const importedSet = new Set(existingImports.map((e) => `${e.sourceType}|${e.sourceId}|${e.sourceVehicleIndex}`));
+  // نقل العهدة بين حفلتين — نفس عربية النقل الحقيقية ممكن تتقترح مرة من ناحية
+  // الحفلة المصدر (custodyOut) ومرة من ناحية الحفلة الهدف (custodyIn). عشان
+  // منمنعش استيرادها مرتين (مرة في كل حفلة) على نفس النقلة، بنتأكد من كل
+  // الاستيرادات المسجّلة لنقلات العهدة دي في **أي حفلة** (مش بس الحفلة الحالية)
+  const custodyTransferIds = [...custodyOut, ...custodyIn].map((c) => c.id);
+  const existingCustodyImportsAnywhere = custodyTransferIds.length
+    ? await prisma.eventCostRecordEntry.findMany({
+        where: { category: 'TRANSPORT', sourceType: 'CUSTODY_TRANSFER', sourceId: { in: custodyTransferIds } },
+        select: { sourceId: true, sourceVehicleIndex: true },
+      })
+    : [];
+
+  const importedSet = new Set(existingImportsForThisEvent.map((e) => `${e.sourceType}|${e.sourceId}|${e.sourceVehicleIndex}`));
+  const custodyImportedAnywhereSet = new Set(existingCustodyImportsAnywhere.map((e) => `${e.sourceId}|${e.sourceVehicleIndex}`));
 
   const suggestions = [];
   function addSuggestions(vouchers, sourceType, sourceLabelPrefix) {
@@ -85,7 +98,8 @@ const getTransportSuggestions = asyncHandler(async (req, res) => {
       const list = Array.isArray(v.vehicles) ? v.vehicles : [];
       list.forEach((vehicleEntry, idx) => {
         const key = `${sourceType}|${v.id}|${idx}`;
-        if (importedSet.has(key)) return; // اتضافت قبل كده، مش نقترحها تاني
+        if (importedSet.has(key)) return; // اتضافت قبل كده في الحفلة دي، مش نقترحها تاني
+        if (sourceType === 'CUSTODY_TRANSFER' && custodyImportedAnywhereSet.has(`${v.id}|${idx}`)) return; // اتضافت في الحفلة التانية بالفعل
         // توافق مع بيانات قديمة كانت مجرد نص بس (بدون عدد) — نعتبرها عدد 1
         const typeLabel = typeof vehicleEntry === 'string' ? vehicleEntry : vehicleEntry?.type;
         const count = typeof vehicleEntry === 'string' ? 1 : Number(vehicleEntry?.count) || 1;
@@ -104,8 +118,21 @@ const getTransportSuggestions = asyncHandler(async (req, res) => {
   }
   addSuggestions(issueVouchers, 'ISSUE_VOUCHER', 'إذن صرف');
   addSuggestions(returnVouchers, 'RETURN_VOUCHER', 'إذن مرتجع');
+  // نوضّح بالظبط النقلة دي كانت من/لأنهي حفلة، عشان يبان في الاقتراح مباشرة
   addSuggestions(custodyOut, 'CUSTODY_TRANSFER', 'نقل عهدة');
   addSuggestions(custodyIn, 'CUSTODY_TRANSFER', 'نقل عهدة');
+
+  // نستبدل تسمية اقتراحات نقل العهدة بنسخة موضّحة فيها اسم الحفلة التانية بالظبط
+  const custodyOutMap = new Map(custodyOut.map((c) => [c.id, c.toEvent?.name]));
+  const custodyInMap = new Map(custodyIn.map((c) => [c.id, c.fromEvent?.name]));
+  suggestions.forEach((s) => {
+    if (s.sourceType !== 'CUSTODY_TRANSFER') return;
+    if (custodyOutMap.has(s.sourceId)) {
+      s.sourceLabel = `نقل عهدة ${custodyOutMap.get(s.sourceId) ? `— لحفلة "${custodyOutMap.get(s.sourceId)}"` : ''}`.trim();
+    } else if (custodyInMap.has(s.sourceId)) {
+      s.sourceLabel = `نقل عهدة ${custodyInMap.get(s.sourceId) ? `— من حفلة "${custodyInMap.get(s.sourceId)}"` : ''}`.trim();
+    }
+  });
 
   suggestions.sort((a, b) => new Date(a.date) - new Date(b.date));
   res.json({ success: true, data: suggestions });
@@ -336,10 +363,10 @@ async function fetchComparisonData({ dateFrom, dateTo, q }) {
   const [allItems, allEntries, allSupplierEntries] = await Promise.all([
     prisma.eventCostItem.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, amount: true } }),
     prisma.eventCostRecordEntry.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, category: true, total: true } }),
-    prisma.eventSupplierEntry.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, total: true } }),
+    prisma.eventSupplierEntry.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, total: true, paidAmount: true, paymentAllocations: { select: { amount: true } } } }),
   ]);
 
-  const perEvent = new Map(events.map((e) => [e.id, { ...e, itemsTotal: 0, categoryTotals: { DECOR_LABOR: 0, UNIFORMS: 0, TRANSPORT: 0, MICROBUS: 0 }, suppliersTotal: 0, grandTotal: 0 }]));
+  const perEvent = new Map(events.map((e) => [e.id, { ...e, itemsTotal: 0, categoryTotals: { DECOR_LABOR: 0, UNIFORMS: 0, TRANSPORT: 0, MICROBUS: 0 }, suppliersTotal: 0, suppliersDue: 0, grandTotal: 0 }]));
   allItems.forEach((i) => {
     const row = perEvent.get(i.eventId);
     if (row) { row.itemsTotal += i.amount; row.grandTotal += i.amount; }
@@ -350,26 +377,33 @@ async function fetchComparisonData({ dateFrom, dateTo, q }) {
   });
   allSupplierEntries.forEach((e) => {
     const row = perEvent.get(e.eventId);
-    if (row) { row.suppliersTotal += e.total; row.grandTotal += e.total; }
+    if (row) {
+      row.suppliersTotal += e.total;
+      row.grandTotal += e.total;
+      const paid = e.paidAmount + e.paymentAllocations.reduce((s, a) => s + a.amount, 0);
+      row.suppliersDue += e.total - paid; // مديونية الموردين — عرض فقط، مش داخلة في أي حساب تاني
+    }
   });
 
   const rows = Array.from(perEvent.values()).filter((r) => r.grandTotal > 0).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
   const overallTotal = rows.reduce((s, r) => s + r.grandTotal, 0);
+  const overallSuppliersDue = rows.reduce((s, r) => s + r.suppliersDue, 0);
   const categorySums = { DECOR_LABOR: 0, UNIFORMS: 0, TRANSPORT: 0, MICROBUS: 0 };
   rows.forEach((r) => { Object.keys(categorySums).forEach((c) => { categorySums[c] += r.categoryTotals[c]; }); });
 
-  return { rows, overallTotal, averagePerEvent: rows.length > 0 ? overallTotal / rows.length : 0, categorySums };
+  return { rows, overallTotal, overallSuppliersDue, averagePerEvent: rows.length > 0 ? overallTotal / rows.length : 0, categorySums };
 }
 
 const getComparisonReport = asyncHandler(async (req, res) => {
   const { dateFrom, dateTo, q } = req.query;
-  const { rows, overallTotal, averagePerEvent, categorySums } = await fetchComparisonData({ dateFrom, dateTo, q });
+  const { rows, overallTotal, overallSuppliersDue, averagePerEvent, categorySums } = await fetchComparisonData({ dateFrom, dateTo, q });
 
   res.json({
     success: true,
     data: {
       rows,
       overallTotal,
+      overallSuppliersDue,
       averagePerEvent,
       categorySums: Object.entries(categorySums).map(([key, total]) => ({ category: key, label: CATEGORY_LABELS[key], total })),
       categoryLabels: CATEGORY_LABELS,
@@ -380,7 +414,7 @@ const getComparisonReport = asyncHandler(async (req, res) => {
 // GET /api/event-costs/comparison/export.xlsx
 const exportComparisonExcel = asyncHandler(async (req, res) => {
   const { dateFrom, dateTo, q } = req.query;
-  const { rows, overallTotal } = await fetchComparisonData({ dateFrom, dateTo, q });
+  const { rows, overallTotal, overallSuppliersDue } = await fetchComparisonData({ dateFrom, dateTo, q });
 
   const excelRows = rows.map((r) => [
     r.number,
@@ -392,14 +426,15 @@ const exportComparisonExcel = asyncHandler(async (req, res) => {
     r.categoryTotals.TRANSPORT,
     r.categoryTotals.MICROBUS,
     r.suppliersTotal,
+    r.suppliersDue,
     r.grandTotal,
   ]);
   const highlightRows = [excelRows.length];
-  excelRows.push(['', '', 'إجمالي كل الحفلات', '', '', '', '', '', '', overallTotal]);
+  excelRows.push(['', '', 'إجمالي كل الحفلات', '', '', '', '', '', '', overallSuppliersDue, overallTotal]);
 
   const buffer = await buildExcelReport(
     'تقرير مقارنة الحفلات',
-    ['رقم الحفلة', 'اسم الحفلة', 'التاريخ', 'بنود التوتال', 'عمالة الديكور', 'البدلات', 'النقل', 'الميكروباص', 'الموردين', 'الإجمالي'],
+    ['رقم الحفلة', 'اسم الحفلة', 'التاريخ', 'بنود التوتال', 'عمالة الديكور', 'البدلات', 'النقل', 'الميكروباص', 'الموردين', 'مديونية الموردين', 'الإجمالي'],
     excelRows,
     { highlightRows }
   );
@@ -502,7 +537,7 @@ async function fetchEventsWithTotals({ q, dateFrom, dateTo, skip, take }) {
   const [allItems, allEntries, allSupplierEntries, overallItems, overallEntries, overallSupplierEntries] = await Promise.all([
     prisma.eventCostItem.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, amount: true } }),
     prisma.eventCostRecordEntry.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, category: true, total: true, date: true } }),
-    prisma.eventSupplierEntry.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, total: true } }),
+    prisma.eventSupplierEntry.findMany({ where: { eventId: { in: eventIds } }, select: { eventId: true, total: true, paidAmount: true, paymentAllocations: { select: { amount: true } } } }),
     // إجمالي حقيقي عبر كل النتائج المطابقة للفلتر، مش بس الصفحة الحالية المعروضة
     prisma.eventCostItem.aggregate({ where: { eventId: { in: allIds } }, _sum: { amount: true } }),
     prisma.eventCostRecordEntry.aggregate({ where: { eventId: { in: allIds } }, _sum: { total: true } }),
@@ -511,6 +546,7 @@ async function fetchEventsWithTotals({ q, dateFrom, dateTo, skip, take }) {
 
   const totalsByEvent = new Map();
   const suppliersByEvent = new Map();
+  const suppliersDueByEvent = new Map(); // مديونية الموردين (المتبقي) — عرض فقط
   const laborDaysByEvent = new Map();
   allItems.forEach((i) => { totalsByEvent.set(i.eventId, (totalsByEvent.get(i.eventId) || 0) + i.amount); });
   allEntries.forEach((e) => {
@@ -522,6 +558,8 @@ async function fetchEventsWithTotals({ q, dateFrom, dateTo, skip, take }) {
   });
   allSupplierEntries.forEach((e) => {
     suppliersByEvent.set(e.eventId, (suppliersByEvent.get(e.eventId) || 0) + e.total);
+    const paid = e.paidAmount + e.paymentAllocations.reduce((s, a) => s + a.amount, 0);
+    suppliersDueByEvent.set(e.eventId, (suppliersDueByEvent.get(e.eventId) || 0) + (e.total - paid));
   });
 
   const data = events.map((ev) => {
@@ -529,30 +567,32 @@ async function fetchEventsWithTotals({ q, dateFrom, dateTo, skip, take }) {
     return {
       ...ev,
       suppliersTotal,
+      suppliersDue: suppliersDueByEvent.get(ev.id) || 0,
       costsTotal: (totalsByEvent.get(ev.id) || 0) + suppliersTotal,
       laborDaysCount: laborDaysByEvent.get(ev.id)?.size || 0,
     };
   });
   const overallTotal = (overallItems._sum.amount || 0) + (overallEntries._sum.total || 0) + (overallSupplierEntries._sum.total || 0);
-  return { data, total, overallTotal };
+  const overallSuppliersDue = Array.from(suppliersDueByEvent.values()).reduce((s, v) => s + v, 0);
+  return { data, total, overallTotal, overallSuppliersDue };
 }
 
 // GET /api/event-costs/events-list — قايمة الحفلات بالإجمالي وعدد أيام العمالة، لصفحة الحسابات الرئيسية
 const getEventsWithTotals = asyncHandler(async (req, res) => {
   const { q, dateFrom, dateTo, page = 1, pageSize = 20 } = req.query;
   const skip = (Number(page) - 1) * Number(pageSize);
-  const { data, total, overallTotal } = await fetchEventsWithTotals({ q, dateFrom, dateTo, skip, take: Number(pageSize) });
-  res.json({ success: true, data, meta: { page: Number(page), pageSize: Number(pageSize), total, totalPages: Math.ceil(total / Number(pageSize)), overallTotal } });
+  const { data, total, overallTotal, overallSuppliersDue } = await fetchEventsWithTotals({ q, dateFrom, dateTo, skip, take: Number(pageSize) });
+  res.json({ success: true, data, meta: { page: Number(page), pageSize: Number(pageSize), total, totalPages: Math.ceil(total / Number(pageSize)), overallTotal, overallSuppliersDue } });
 });
 
 // GET /api/event-costs/events-list/export.xlsx — نفس القايمة، مصدّرة إكسيل كاملة (من غير تقسيم صفحات)
 const exportEventsListExcel = asyncHandler(async (req, res) => {
   const { q, dateFrom, dateTo } = req.query;
-  const { data, overallTotal } = await fetchEventsWithTotals({ q, dateFrom, dateTo });
-  const rows = data.map((ev) => [ev.number, ev.name, ev.client?.name || '—', new Date(ev.startDate).toLocaleDateString('ar-EG'), ev.suppliersTotal, ev.costsTotal, ev.laborDaysCount]);
+  const { data, overallTotal, overallSuppliersDue } = await fetchEventsWithTotals({ q, dateFrom, dateTo });
+  const rows = data.map((ev) => [ev.number, ev.name, ev.client?.name || '—', new Date(ev.startDate).toLocaleDateString('ar-EG'), ev.suppliersTotal, ev.suppliersDue, ev.costsTotal, ev.laborDaysCount]);
   const highlightRows = [rows.length];
-  rows.push(['', '', '', 'إجمالي كل الحفلات', '', overallTotal, '']);
-  const buffer = await buildExcelReport('كشوفات تكاليف الحفلات', ['رقم الحفلة', 'اسم الحفلة', 'العميل', 'التاريخ', 'الموردين', 'الإجمالي', 'عدد أيام العمالة'], rows, { highlightRows });
+  rows.push(['', '', '', 'إجمالي كل الحفلات', '', overallSuppliersDue, overallTotal, '']);
+  const buffer = await buildExcelReport('كشوفات تكاليف الحفلات', ['رقم الحفلة', 'اسم الحفلة', 'العميل', 'التاريخ', 'الموردين', 'مديونية الموردين', 'الإجمالي', 'عدد أيام العمالة'], rows, { highlightRows });
   sendXlsx(res, 'كشوفات-تكاليف-الحفلات', buffer);
 });
 
