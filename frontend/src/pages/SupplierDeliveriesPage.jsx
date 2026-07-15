@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import api from '../api/client';
 import PageHeader from '../components/PageHeader';
 import { getAssetUrl } from '../utils/assetUrl';
+import { downloadPdf } from '../utils/printDocument';
+import { escapeHtml as esc } from '../utils/escapeHtml';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -79,6 +81,51 @@ export default function SupplierDeliveriesPage() {
 
   const pendingCount = deliveries.filter((d) => !d.addedToWarehouseId).length;
 
+  async function dismissDelivery(d) {
+    if (!confirm(t('استبعاد الوارد ده من قايمة المخزن؟ (هيفضل مسجّل على المورد كتكلفة)'))) return;
+    setError('');
+    try {
+      await api.patch(`/supplier-deliveries/${d.id}/dismiss`, { dismissed: true });
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || t('حصل خطأ'));
+    }
+  }
+
+  function exportPdf() {
+    const rows = deliveries.map((d) => {
+      const status = d.addedToWarehouseId ? 'اتضاف للمخزن' : d.dismissedFromWarehouse ? 'مستبعَد' : 'لسه';
+      return `<tr><td>${esc(d.itemName)}</td><td>${d.count} ${esc(d.unit)}</td><td>${esc(d.supplier.name)}</td><td>${esc(d.event.name)}</td><td>${new Date(d.invoiceDate).toLocaleDateString('ar-EG')}</td><td>${status}</td></tr>`;
+    }).join('');
+    downloadPdf(
+      'واردات الموردين',
+      `<table><thead><tr><th>الصنف</th><th>الكمية</th><th>المورد</th><th>الحفلة</th><th>التاريخ</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table>`,
+    );
+  }
+
+  function exportExcel() {
+    // نبني CSV بسيط (يفتح في إكسيل) من نفس بيانات الجدول الظاهرة
+    const header = ['الصنف', 'الكمية', 'الوحدة', 'المورد', 'الحفلة', 'رقم الحفلة', 'التاريخ', 'الحالة'];
+    const lines = deliveries.map((d) => [
+      d.itemName,
+      d.count,
+      d.unit,
+      d.supplier.name,
+      d.event.name,
+      d.event.number,
+      new Date(d.invoiceDate).toLocaleDateString('ar-EG'),
+      d.addedToWarehouseId ? 'اتضاف للمخزن' : d.dismissedFromWarehouse ? 'مستبعَد' : 'لسه',
+    ]);
+    const csv = [header, ...lines].map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'واردات-الموردين.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <PageHeader
@@ -96,22 +143,28 @@ export default function SupplierDeliveriesPage() {
         )}
 
         {/* فلتر */}
-        <div className="flex gap-2">
-          {[
-            { key: 'pending', label: t('لسه ماتضافش') },
-            { key: 'added', label: t('اتضاف للمخزن') },
-            { key: 'all', label: t('الكل') },
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`text-xs font-bold px-3.5 py-2 rounded-lg transition border ${
-                filter === f.key ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex gap-2 flex-wrap items-center justify-between">
+          <div className="flex gap-2">
+            {[
+              { key: 'pending', label: t('لسه ماتضافش') },
+              { key: 'added', label: t('اتضاف للمخزن') },
+              { key: 'all', label: t('الكل') },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`text-xs font-bold px-3.5 py-2 rounded-lg transition border ${
+                  filter === f.key ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={exportPdf} className="text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 hover:border-gray-300 transition">PDF</button>
+            <button onClick={exportExcel} className="text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 hover:border-gray-300 transition">Excel</button>
+          </div>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
@@ -149,10 +202,17 @@ export default function SupplierDeliveriesPage() {
                   <td className="px-4 py-3">
                     {d.addedToWarehouseId ? (
                       <span className="text-emerald-600 text-xs font-bold">✓ {t('اتضاف')}</span>
+                    ) : d.dismissedFromWarehouse ? (
+                      <span className="text-gray-400 text-xs font-bold">{t('مستبعَد')}</span>
                     ) : can('items', 'create') ? (
-                      <button onClick={() => openAddForm(d)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                        {t('أضف للمخزن')}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => openAddForm(d)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                          {t('أضف للمخزن')}
+                        </button>
+                        <button onClick={() => dismissDelivery(d)} title={t('استبعاد (مش هيتخزّن)')} className="text-rose-600 text-xs font-bold hover:underline">
+                          {t('استبعاد')}
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-amber-600 text-xs font-bold">{t('لسه')}</span>
                     )}

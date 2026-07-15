@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import PageHeader from '../components/PageHeader';
 import { downloadFile } from '../utils/downloadFile';
+import { downloadPdf } from '../utils/printDocument';
+import { escapeHtml as esc } from '../utils/escapeHtml';
 import { getAssetUrl } from '../utils/assetUrl';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +18,8 @@ export default function SupplierDetailPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // الفاتورة المفتوحة حالياً في جدول "كل الفواتير" (نضغط عليها يظهر تفصيلها)
+  const [openEntryId, setOpenEntryId] = useState(null);
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
@@ -90,6 +94,33 @@ export default function SupplierDetailPage() {
   if (!data) return <div className="p-7 text-center text-rose-600 text-sm">{error || t('المورد غير موجود')}</div>;
 
   const { supplier, entries, payments, events, openInvoices = [], totalInvoiced, totalPaid, due } = data;
+
+  function paidOf(e) { return e.paidTotal ?? e.paidAmount; }
+
+  function exportInvoicesPdf() {
+    const rows = entries.map((e) => {
+      const paid = paidOf(e);
+      const lines = (e.lines || []).map((l) => `${esc(l.itemName)} — ${l.count} ${esc(l.unit)} × ${l.unitPrice.toLocaleString()}`).join('<br>');
+      return `<tr><td>${new Date(e.date).toLocaleDateString('ar-EG')}</td><td>${esc(e.event?.name || '—')}</td><td>${esc(e.description)}${lines ? `<br><span style="color:#666;font-size:11px">${lines}</span>` : ''}</td><td>${e.total.toLocaleString()}</td><td>${paid.toLocaleString()}</td><td>${(e.total - paid).toLocaleString()}</td></tr>`;
+    }).join('');
+    downloadPdf(
+      `فواتير المورد: ${esc(supplier.name)}`,
+      `<table><thead><tr><th>التاريخ</th><th>الحفلة</th><th>الوصف</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>${rows}
+        <tr style="font-weight:bold;background:#f3f4f6;"><td colspan="3">الإجمالي</td><td>${totalInvoiced.toLocaleString()}</td><td>${totalPaid.toLocaleString()}</td><td>${(totalInvoiced - totalPaid).toLocaleString()}</td></tr>
+      </tbody></table>`,
+    );
+  }
+
+  function exportPaymentsPdf() {
+    const rows = payments.map((p) => {
+      const allocs = (p.allocations || []).map((a) => `${esc(a.entry?.event?.name || a.entry?.description || '')}: ${a.amount.toLocaleString()}`).join('<br>') || 'دفعة عامة';
+      return `<tr><td>${new Date(p.date).toLocaleDateString('ar-EG')}</td><td>${p.amount.toLocaleString()}</td><td>${allocs}</td><td>${esc(p.notes || '—')}</td></tr>`;
+    }).join('');
+    downloadPdf(
+      `دفعات المورد: ${esc(supplier.name)}`,
+      `<table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>موزّعة على</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table>`,
+    );
+  }
 
   return (
     <>
@@ -170,8 +201,12 @@ export default function SupplierDetailPage() {
 
         {/* ============ كل الفواتير ============ */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
             <h3 className="font-extrabold">{t('كل الفواتير')}</h3>
+            <div className="flex gap-2">
+              <button onClick={exportInvoicesPdf} className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-300 transition">PDF</button>
+              <button onClick={() => downloadFile(`/suppliers/${id}/export-excel`, `مورد-${supplier.name}.xlsx`)} className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-300 transition">Excel</button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -186,32 +221,70 @@ export default function SupplierDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((e) => (
-                  <tr key={e.id} className="border-t border-gray-50 align-top">
-                    <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{new Date(e.date).toLocaleDateString(locale)}</td>
-                    <td className="px-4 py-2.5">{e.event?.name || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <div>{e.description}</div>
-                      <div className="mt-1 space-y-0.5">
-                        {(e.lines || []).map((l) => (
-                          <div key={l.id} className="text-[11px] text-gray-500">
-                            {l.itemName} — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}
-                          </div>
-                        ))}
-                      </div>
-                      {e.imageUrl && (
-                        <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
-                          <img src={getAssetUrl(e.imageUrl)} alt="" className="w-9 h-9 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
-                        </a>
+                {entries.map((e) => {
+                  const paid = paidOf(e);
+                  const remaining = e.total - paid;
+                  const isOpen = openEntryId === e.id;
+                  return (
+                    <>
+                      <tr
+                        key={e.id}
+                        onClick={() => setOpenEntryId(isOpen ? null : e.id)}
+                        className="border-t border-gray-50 hover:bg-gray-50/60 transition cursor-pointer"
+                      >
+                        <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{new Date(e.date).toLocaleDateString(locale)}</td>
+                        <td className="px-4 py-2.5">
+                          {e.event ? <Link to={`/accounts/${e.event.id}`} onClick={(ev) => ev.stopPropagation()} className="text-blue-600 hover:underline">{e.event.name}</Link> : '—'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-gray-400 text-xs mr-1">{isOpen ? '▾' : '▸'}</span>
+                          {e.description}
+                        </td>
+                        <td className="px-4 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-emerald-600 whitespace-nowrap">{paid.toLocaleString()}</td>
+                        <td className={`px-4 py-2.5 font-bold whitespace-nowrap ${remaining > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {remaining.toLocaleString()}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr className="bg-gray-50/50">
+                          <td colSpan={6} className="px-6 py-3">
+                            <div className="text-xs font-bold text-gray-600 mb-1.5">{t('تفاصيل الفاتورة')}</div>
+                            {(e.lines || []).length > 0 ? (
+                              <table className="w-full text-xs mb-2">
+                                <thead>
+                                  <tr className="text-gray-400">
+                                    <th className="text-right py-1 font-bold">{t('الصنف')}</th>
+                                    <th className="text-right py-1 font-bold">{t('العدد')}</th>
+                                    <th className="text-right py-1 font-bold">{t('سعر الوحدة')}</th>
+                                    <th className="text-right py-1 font-bold">{t('الإجمالي')}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {e.lines.map((l) => (
+                                    <tr key={l.id} className="border-t border-gray-100">
+                                      <td className="py-1">{l.itemName}</td>
+                                      <td className="py-1">{l.count} {l.unit}</td>
+                                      <td className="py-1">{l.unitPrice.toLocaleString()}</td>
+                                      <td className="py-1 font-bold">{l.total.toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              <div className="text-xs text-gray-400 mb-2">{t('فاتورة بمبلغ إجمالي بدون بنود تفصيلية')}</div>
+                            )}
+                            {e.imageUrl && (
+                              <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block">
+                                <img src={getAssetUrl(e.imageUrl)} alt="" className="w-16 h-16 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
+                              </a>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-4 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-emerald-600 whitespace-nowrap">{e.paidAmount.toLocaleString()}</td>
-                    <td className={`px-4 py-2.5 font-bold whitespace-nowrap ${e.total - e.paidAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {(e.total - e.paidAmount).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                    </>
+                  );
+                })}
                 {entries.length === 0 && (
                   <tr><td colSpan={6} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير لسه')}</td></tr>
                 )}
@@ -224,11 +297,14 @@ export default function SupplierDetailPage() {
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-extrabold">{t('الدفعات')}</h3>
-            {can('suppliers', 'edit') && (
-              <button onClick={openPaymentForm} className="text-blue-600 text-sm font-bold hover:underline">
-                + {t('تسجيل دفعة')}
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <button onClick={exportPaymentsPdf} className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-300 transition">PDF</button>
+              {can('suppliers', 'edit') && (
+                <button onClick={openPaymentForm} className="text-blue-600 text-sm font-bold hover:underline">
+                  + {t('تسجيل دفعة')}
+                </button>
+              )}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

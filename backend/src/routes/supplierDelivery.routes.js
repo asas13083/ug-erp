@@ -9,5 +9,6 @@ router.use(requireAuth);
 // (عشان يشوف الأصناف من غير ما يشوف أي بيانات مالية خالص)
 router.get('/', requirePermission('items', 'view'), ctrl.listDeliveries);
 router.post('/:lineId/add-to-warehouse', requirePermission('items', 'create'), ctrl.addDeliveryToWarehouse);
+router.patch('/:lineId/dismiss', requirePermission('items', 'create'), ctrl.dismissDelivery);
 
 module.exports = router;

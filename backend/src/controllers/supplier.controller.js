@@ -188,7 +188,12 @@ const listDeliveries = asyncHandler(async (req, res) => {
   const { status } = req.query; // pending | added | (كله لو مش متحدد)
 
   const lines = await prisma.eventSupplierEntryLine.findMany({
-    where: status === 'pending' ? { addedToWarehouseId: null } : status === 'added' ? { addedToWarehouseId: { not: null } } : {},
+    where:
+      status === 'pending'
+        ? { addedToWarehouseId: null, dismissedFromWarehouse: false }
+        : status === 'added'
+          ? { addedToWarehouseId: { not: null } }
+          : {},
     include: {
       entry: {
         select: {
@@ -213,6 +218,7 @@ const listDeliveries = asyncHandler(async (req, res) => {
     addedToWarehouseId: l.addedToWarehouseId,
     addedAt: l.addedAt,
     createdItemId: l.createdItemId,
+    dismissedFromWarehouse: l.dismissedFromWarehouse,
     supplier: l.entry.supplier,
     event: l.entry.event,
     invoiceDate: l.entry.date,
@@ -221,6 +227,39 @@ const listDeliveries = asyncHandler(async (req, res) => {
   }));
 
   res.json({ success: true, data });
+});
+
+/**
+ * PATCH /api/supplier-deliveries/:lineId/dismiss
+ * أمين المخزن بيستبعد البند من قايمته (بند إيجار مثلاً مش هيتخزّن). البند
+ * بيفضل مسجّل كتكلفة على المورد، بس بيختفي من قايمة "زوّد المخزن". قابل
+ * للتراجع. مينفعش نستبعد بند اتضاف للمخزن فعلاً.
+ */
+const dismissDelivery = asyncHandler(async (req, res) => {
+  const { lineId } = req.params;
+  const { dismissed = true } = req.body;
+
+  const line = await prisma.eventSupplierEntryLine.findUnique({
+    where: { id: lineId },
+    include: { entry: { include: { supplier: true, event: true } } },
+  });
+  if (!line) throw new AppError('البند غير موجود', 404);
+  if (line.addedToWarehouseId) throw new AppError('البند ده اتضاف للمخزن بالفعل، مينفعش تستبعده', 409);
+
+  const updated = await prisma.eventSupplierEntryLine.update({
+    where: { id: lineId },
+    data: { dismissedFromWarehouse: !!dismissed },
+  });
+
+  await logActivity({
+    action: 'UPDATE',
+    entityType: 'EventSupplierEntryLine',
+    entityId: lineId,
+    description: `${dismissed ? 'استبعاد' : 'إرجاع'} وارد مورد ${dismissed ? 'من' : 'إلى'} قايمة المخزن: ${line.itemName} — ${line.entry.supplier.name}`,
+    userId: req.user.id,
+  });
+
+  res.json({ success: true, data: updated });
 });
 
 /**
@@ -579,6 +618,7 @@ module.exports = {
   deleteEventEntry,
   listDeliveries,
   addDeliveryToWarehouse,
+  dismissDelivery,
   getSupplierProfile,
   listWithBalances,
   createPayment,

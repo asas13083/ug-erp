@@ -831,6 +831,9 @@ model EventSupplierEntryLine {
   addedAt            DateTime?
   addedByUserId      String?
   createdItemId      String?   // الصنف اللي اتعمل/اتحدّث في المخزون
+  // أمين المخزن يقدر "يستبعد" البند من قايمة زوّد المخزن (مثلاً لو البند
+  // إيجار مش هيتخزّن). بيختفي من قايمته بس بيفضل مسجّل كتكلفة على المورد.
+  dismissedFromWarehouse Boolean @default(false)
 
   entry EventSupplierEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 

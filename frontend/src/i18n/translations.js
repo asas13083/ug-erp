@@ -502,6 +502,13 @@ Object.assign(translations, {
   'ليك عند المورد (دفعت زيادة)': { en: 'Credit with supplier (overpaid)' },
   'ليك عند المورد': { en: 'Credit with supplier' },
   'دفعت زيادة': { en: 'Overpaid' },
+  'عليه (المتبقي)': { en: 'Owed (remaining)' },
+  'تفاصيل الفاتورة': { en: 'Invoice details' },
+  'فاتورة بمبلغ إجمالي بدون بنود تفصيلية': { en: 'Lump-sum invoice with no line items' },
+  'استبعاد': { en: 'Exclude' },
+  'مستبعَد': { en: 'Excluded' },
+  'استبعاد (مش هيتخزّن)': { en: 'Exclude (won\'t be stocked)' },
+  'استبعاد الوارد ده من قايمة المخزن؟ (هيفضل مسجّل على المورد كتكلفة)': { en: 'Exclude this delivery from the warehouse list? (stays as a supplier cost)' },
   'المستخدمون والصلاحيات': { en: 'Users & Permissions' },
   'إعدادات النظام': { en: 'System Settings' },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import PageHeader from '../components/PageHeader';
@@ -40,6 +40,8 @@ export default function EventCostDetailPage() {
   const [editingSupplierEntry, setEditingSupplierEntry] = useState(null);
   const [supForm, setSupForm] = useState({ supplierId: '', date: new Date().toISOString().slice(0, 10), description: '', paidAmount: 0, imageUrl: '', notes: '' });
   const [supLines, setSupLines] = useState([{ itemName: '', unit: 'قطعة', count: 1, unitPrice: '' }]);
+  // المورد المفتوح حالياً في كشف الحفلة (نضغط على اسمه تظهر فواتيره)
+  const [openSupplierId, setOpenSupplierId] = useState(null);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
 
   const [categoryEntries, setCategoryEntries] = useState({ entries: [], total: 0 });
@@ -421,6 +423,23 @@ export default function EventCostDetailPage() {
   if (error) return <div className="p-10 text-center text-rose-600">{error}</div>;
   if (!event || !summary) return null;
 
+  // تجميع فواتير الموردين حسب كل مورد: سطر واحد لكل مورد فيه إجماليه والمتبقّي
+  // عليه، وتحته فواتيره (تظهر بالضغط). ده اللي بيخلّي كل مورد لوحده في الكشف.
+  const supplierGroups = (() => {
+    const map = new Map();
+    (supplierEntries.entries || []).forEach((e) => {
+      if (!map.has(e.supplierId)) {
+        map.set(e.supplierId, { supplierId: e.supplierId, supplier: e.supplier, entries: [], total: 0, paid: 0 });
+      }
+      const g = map.get(e.supplierId);
+      const paid = e.paidTotal ?? e.paidAmount;
+      g.entries.push(e);
+      g.total += e.total;
+      g.paid += paid;
+    });
+    return Array.from(map.values()).map((g) => ({ ...g, due: g.total - g.paid }));
+  })();
+
   return (
     <>
       <PageHeader
@@ -561,74 +580,88 @@ export default function EventCostDetailPage() {
                 <thead>
                   <tr className="bg-gray-50 text-gray-500 text-[11px]">
                     <th className="text-right px-3 py-2 font-bold">{t('المورد')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('التاريخ')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('الفاتورة')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('الأصناف')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('عدد الفواتير')}</th>
                     <th className="text-right px-3 py-2 font-bold">{t('الإجمالي')}</th>
                     <th className="text-right px-3 py-2 font-bold">{t('المدفوع')}</th>
-                    <th className="text-right px-3 py-2 font-bold">{t('المتبقي')}</th>
-                    <th className="text-right px-3 py-2 font-bold w-24">{t('إجراءات')}</th>
+                    <th className="text-right px-3 py-2 font-bold">{t('عليه (المتبقي)')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {supplierEntries.entries.map((e) => {
-                    const paid = e.paidTotal ?? e.paidAmount;
-                    const due = e.total - paid;
+                  {supplierGroups.map((g) => {
+                    const isOpen = openSupplierId === g.supplierId;
                     return (
-                      <tr key={e.id} className="border-t border-gray-50 align-top">
-                        <td className="px-3 py-2.5 font-bold">
-                          <Link to={`/suppliers/${e.supplierId}`} className="text-blue-600 hover:underline">{e.supplier.name}</Link>
-                        </td>
-                        <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{new Date(e.date).toLocaleDateString(locale)}</td>
-                        <td className="px-3 py-2.5">
-                          <div>{e.description}</div>
-                          {e.imageUrl && (
-                            <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
-                              <img src={getAssetUrl(e.imageUrl)} alt="" className="w-10 h-10 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
-                            </a>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="space-y-0.5">
-                            {(e.lines || []).map((l) => (
-                              <div key={l.id} className="text-xs">
-                                <span className="font-bold">{l.itemName}</span>
-                                <span className="text-gray-500"> — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}</span>
-                                {l.addedToWarehouseId && <span className="text-emerald-600 font-bold"> ✓</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-emerald-600 whitespace-nowrap">{paid.toLocaleString()}</td>
-                        <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex gap-2">
-                            {can('accounts', 'edit') && (
-                              <button onClick={() => openSupplierForm(e)} className="text-blue-600 text-xs font-bold hover:underline">{t('تعديل')}</button>
-                            )}
-                            {can('accounts', 'delete') && (
-                              <button onClick={() => deleteSupplierEntry(e)} className="text-rose-600 text-xs font-bold hover:underline">{t('حذف')}</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                      <React.Fragment key={g.supplierId}>
+                        <tr
+                          onClick={() => setOpenSupplierId(isOpen ? null : g.supplierId)}
+                          className="border-t border-gray-100 hover:bg-gray-50/60 transition cursor-pointer"
+                        >
+                          <td className="px-3 py-3 font-bold">
+                            <span className="text-gray-400 text-xs mr-1">{isOpen ? '▾' : '▸'}</span>
+                            {g.supplier?.name}
+                          </td>
+                          <td className="px-3 py-3 text-gray-600">{g.entries.length}</td>
+                          <td className="px-3 py-3 font-extrabold whitespace-nowrap">{g.total.toLocaleString()}</td>
+                          <td className="px-3 py-3 text-emerald-600 whitespace-nowrap">{g.paid.toLocaleString()}</td>
+                          <td className={`px-3 py-3 font-bold whitespace-nowrap ${g.due > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>{g.due.toLocaleString()}</td>
+                        </tr>
+
+                        {isOpen && g.entries.map((e) => {
+                          const paid = e.paidTotal ?? e.paidAmount;
+                          const due = e.total - paid;
+                          return (
+                            <tr key={e.id} className="bg-gray-50/40 border-t border-gray-50 align-top">
+                              <td className="px-3 py-2.5" colSpan={2}>
+                                <div className="flex items-start gap-2 pr-4">
+                                  <div className="flex-1">
+                                    <div className="text-xs text-gray-500 mb-0.5">{new Date(e.date).toLocaleDateString(locale)}</div>
+                                    <div className="font-bold text-sm">{e.description}</div>
+                                    <div className="mt-1 space-y-0.5">
+                                      {(e.lines || []).map((l) => (
+                                        <div key={l.id} className="text-xs">
+                                          <span className="font-bold">{l.itemName}</span>
+                                          <span className="text-gray-500"> — {l.count} {l.unit} × {l.unitPrice.toLocaleString()}</span>
+                                          {l.addedToWarehouseId && <span className="text-emerald-600 font-bold"> ✓</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {e.imageUrl && (
+                                      <a href={getAssetUrl(e.imageUrl)} target="_blank" rel="noreferrer" className="inline-block mt-1">
+                                        <img src={getAssetUrl(e.imageUrl)} alt="" className="w-10 h-10 rounded object-cover border border-gray-200 hover:opacity-80 transition" />
+                                      </a>
+                                    )}
+                                    <div className="flex gap-3 mt-1">
+                                      {can('accounts', 'edit') && (
+                                        <button onClick={() => openSupplierForm(e)} className="text-blue-600 text-xs font-bold hover:underline">{t('تعديل')}</button>
+                                      )}
+                                      {can('accounts', 'delete') && (
+                                        <button onClick={() => deleteSupplierEntry(e)} className="text-rose-600 text-xs font-bold hover:underline">{t('حذف')}</button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 font-bold whitespace-nowrap">{e.total.toLocaleString()}</td>
+                              <td className="px-3 py-2.5 text-emerald-600 whitespace-nowrap">{paid.toLocaleString()}</td>
+                              <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${due > 0.001 ? 'text-rose-600' : 'text-emerald-600'}`}>{due.toLocaleString()}</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
-                  {supplierEntries.entries.length === 0 && (
+                  {supplierGroups.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير موردين لسه')}</td>
+                      <td colSpan={5} className="text-center py-8 text-gray-500 text-sm">{t('مفيش فواتير موردين لسه')}</td>
                     </tr>
                   )}
                 </tbody>
-                {supplierEntries.entries.length > 0 && (
+                {supplierGroups.length > 0 && (
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 bg-gray-50 font-extrabold">
-                      <td colSpan={4} className="px-3 py-2.5">{t('الإجمالي')}</td>
+                      <td className="px-3 py-2.5" colSpan={2}>{t('الإجمالي')}</td>
                       <td className="px-3 py-2.5">{supplierEntries.total.toLocaleString()}</td>
                       <td className="px-3 py-2.5 text-emerald-600">{supplierEntries.paid.toLocaleString()}</td>
                       <td className={`px-3 py-2.5 ${supplierEntries.due > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{supplierEntries.due.toLocaleString()}</td>
-                      <td></td>
                     </tr>
                   </tfoot>
                 )}
