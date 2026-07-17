@@ -174,7 +174,7 @@ export default function ReturnVouchersListPage() {
                 <th className="text-right px-4 py-3 font-bold w-6"></th>
                 <th className="text-right px-4 py-3 font-bold">{t('الرقم')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الحفلة')}</th>
-                <th className="text-right px-4 py-3 font-bold">{t('راح فين')}</th>
+                <th className="text-right px-4 py-3 font-bold">{t('الوجهة')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('بواسطة')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('النقل')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('الحالة')}</th>

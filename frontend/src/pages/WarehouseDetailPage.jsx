@@ -165,7 +165,7 @@ export default function WarehouseDetailPage() {
                   <th className="text-right px-4 py-3 font-bold">{t('محجوز')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('المتاح')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('لسه برا')}</th>
-                  <th className="text-right px-4 py-3 font-bold">{t('برا في كام حفلة')}</th>
+                  <th className="text-right px-4 py-3 font-bold">{t('عدد الحفلات (لسه برا)')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('الفاقد')}</th>
                   <th className="text-right px-4 py-3 font-bold">{t('إجمالي كمية الصنف')}</th>
                   <th className="text-right px-4 py-3 font-bold w-24">{t('إجراءات')}</th>

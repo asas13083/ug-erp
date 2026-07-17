@@ -147,7 +147,7 @@ export default function EventsPage() {
             <thead>
               <tr className="bg-gray-50 text-gray-600 text-xs">
                 <th className="text-right px-4 py-3 font-bold">{t('الرقم')}</th>
-                <th className="text-right px-4 py-3 font-bold">{t('الصورة')}</th>
+                <th className="text-right px-4 py-3 font-bold">{t('الشعار')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('اسم الحفلة')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('العميل')}</th>
                 <th className="text-right px-4 py-3 font-bold">{t('التاريخ')}</th>
